@@ -1,8 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('./db');
-const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+
+// Функция безопасного хеширования пароля через встроенный crypto
+function hashPassword(password) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+    return `${salt}:${hash}`;
+}
+
+// Функция проверки пароля
+function verifyPassword(password, storedHash) {
+    const [salt, key] = storedHash.split(':');
+    const hashedBuffer = crypto.scryptSync(password, salt, 64);
+    return crypto.timingSafeEqual(Buffer.from(key, 'hex'), hashedBuffer);
+}
 
 // Роут регистрации
 router.post('/register', async (req, res) => {
@@ -23,8 +37,7 @@ router.post('/register', async (req, res) => {
         }
 
         // Хэшируем пароль
-        const saltRounds = 10;
-        const passwordHash = await bcrypt.hash(password, saltRounds);
+        const passwordHash = hashPassword(password);
 
         // Сохраняем в базу
         const newUser = await pool.query(
@@ -49,7 +62,5 @@ router.post('/register', async (req, res) => {
         res.status(500).json({ error: 'Внутренняя ошибка сервера' });
     }
 });
-
-// Здесь могут быть ваши другие роуты (например, /login), если они есть
 
 module.exports = router;
