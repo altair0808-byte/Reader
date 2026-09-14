@@ -10,7 +10,7 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
       - key: NODE_VERSION
         value: 20.11.1
