@@ -1,7 +1,8 @@
-const pool = require('./db'); // <--- Добавьте это в самый верх authRoutes.js
 const express = require('express');
 const router = express.Router();
-const express = require('express');
+const pool = require('./db');
+const bcrypt = require('bcrypt'); // если используется
+const jwt = require('jsonwebtoken'); // если используется
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
