@@ -37,17 +37,6 @@ async function initDB() {
     console.error("Ошибка при создании таблиц:", err);
   }
 }
-    
-    // Автоматически добавляем колонку email, если таблица уже была создана ранее без неё
-    await pool.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
-    `);
-
-    console.log("Таблица 'users' успешно проверена/обновлена");
-  } catch (err) {
-    console.error("Ошибка при создании таблиц:", err);
-  }
-}
 
 app.use(express.json());
 
