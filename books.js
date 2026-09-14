@@ -1,13 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/db');
-const { authenticate, requireAdminOrAbove } = require('../middleware/auth');
-const { generateBookAsync } = require('../services/bookGenerator');
+const db = require('./db');
+const { authenticate, requireAdminOrAbove } = require('./auth');
+const { generateBookAsync } = require('./bookGenerator');
 
 /**
  * GET /api/books
- * Список книг — доступен любому авторизованному пользователю
- * (включая reader).
  */
 router.get('/', authenticate, async (req, res, next) => {
     try {
@@ -25,7 +23,6 @@ router.get('/', authenticate, async (req, res, next) => {
 
 /**
  * GET /api/books/:id/chapters/:chapterNumber
- * Текст конкретной главы — для режима чтения.
  */
 router.get('/:id/chapters/:chapterNumber', authenticate, async (req, res, next) => {
     try {
@@ -47,17 +44,14 @@ router.get('/:id/chapters/:chapterNumber', authenticate, async (req, res, next) 
 
 /**
  * POST /api/books
- * Body: { shortDescription, genre?, chaptersCount? }
- *
- * Создаёт книгу и запускает асинхронную генерацию глав.
- * Доступно только admin/superadmin.
+ * Body: { shortDescription, genre?, chaptersCount?, useWebEnrichment? }
  */
 router.post('/', authenticate, requireAdminOrAbove, async (req, res, next) => {
     const {
         shortDescription,
         genre,
         chaptersCount = 10,
-        useWebEnrichment = false, // включать веб-поиск фактов (историческая/нон-фикшн тематика)
+        useWebEnrichment = false,
     } = req.body;
 
     if (!shortDescription || shortDescription.trim().length < 10) {
@@ -77,7 +71,7 @@ router.post('/', authenticate, requireAdminOrAbove, async (req, res, next) => {
              VALUES ($1, $2, $3, 'generating', $4, $5, $6)
              RETURNING *`,
             [
-                shortDescription.slice(0, 60), // временный тайтл, LLM его переопределит
+                shortDescription.slice(0, 60),
                 shortDescription,
                 genre || null,
                 chaptersCount,
@@ -88,8 +82,6 @@ router.post('/', authenticate, requireAdminOrAbove, async (req, res, next) => {
 
         const book = rows[0];
 
-        // Генерация запускается в фоне — эндпоинт сразу отдаёт 202,
-        // клиент опрашивает /api/books/:id для отслеживания статуса.
         generateBookAsync(book.id).catch((err) => {
             console.error(`Ошибка генерации книги ${book.id}:`, err);
         });

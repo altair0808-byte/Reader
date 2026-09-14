@@ -1,20 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/db');
-const { authenticate } = require('../middleware/auth');
+const db = require('./db');
+const { authenticate } = require('./auth');
 
-/**
- * GET /api/users/me
- */
 router.get('/me', authenticate, (req, res) => {
     res.json({ user: req.user });
 });
 
-/**
- * PATCH /api/users/me/reader-settings
- * Body: { font_family?, font_size?, line_height?, theme? }
- * Доступно любому авторизованному пользователю — это личные настройки чтения.
- */
 router.patch('/me/reader-settings', authenticate, async (req, res, next) => {
     const allowedKeys = ['font_family', 'font_size', 'line_height', 'theme'];
     const updates = {};

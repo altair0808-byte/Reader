@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const db = require('../config/db');
+const db = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -67,7 +67,6 @@ function requireRole(...allowedRoles) {
     };
 }
 
-// Готовые шорткаты для читаемости роутов
 const requireSuperAdmin = requireRole('superadmin');
 const requireAdminOrAbove = requireRole('admin', 'superadmin');
 

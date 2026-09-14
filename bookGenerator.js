@@ -1,4 +1,4 @@
-const db = require('../config/db');
+const db = require('./db');
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';

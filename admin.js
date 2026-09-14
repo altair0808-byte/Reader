@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/db');
-const { authenticate, requireSuperAdmin } = require('../middleware/auth');
+const db = require('./db');
+const { authenticate, requireSuperAdmin } = require('./auth');
 
 // Все роуты этого файла — только для суперадмина
 router.use(authenticate, requireSuperAdmin);
@@ -26,12 +26,6 @@ router.get('/users', async (req, res, next) => {
 /**
  * PATCH /api/admin/users/:id/role
  * Body: { role: 'admin' | 'reader' }
- *
- * Суперадмин может повышать читателя до админа и понижать
- * админа обратно до читателя. Роль 'superadmin' через этот
- * эндпоинт не назначается и не отбирается — это осознанное
- * ограничение: в системе должен быть один суперадмин,
- * назначаемый только на уровне инфраструктуры/сида.
  */
 router.patch('/users/:id/role', async (req, res, next) => {
     const { id } = req.params;
@@ -44,8 +38,6 @@ router.patch('/users/:id/role', async (req, res, next) => {
         });
     }
 
-    // Нельзя менять роль самому себе через этот эндпоинт
-    // (страховка от случайного самопонижения суперадмина)
     if (id === req.user.id) {
         return res.status(400).json({ error: 'Нельзя менять собственную роль' });
     }
