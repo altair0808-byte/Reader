@@ -19,11 +19,24 @@ async function initDB() {
           id SERIAL PRIMARY KEY,
           username VARCHAR(255) UNIQUE NOT NULL,
           email VARCHAR(255),
+          display_name VARCHAR(255),
           password_hash VARCHAR(255) NOT NULL,
           role VARCHAR(50) DEFAULT 'reader',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    
+    // Автоматически добавляем колонки, если таблица уже существовала ранее
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
+    `);
+
+    console.log("Таблица 'users' успешно проверена/обновлена со всеми колонками");
+  } catch (err) {
+    console.error("Ошибка при создании таблиц:", err);
+  }
+}
     
     // Автоматически добавляем колонку email, если таблица уже была создана ранее без неё
     await pool.query(`
