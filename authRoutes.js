@@ -28,24 +28,26 @@ function publicUser(user) {
  * делается только суперадмином через /api/admin/users/:id/role.
  */
 router.post('/register', async (req, res) => {
+    console.log("1. Начало регистрации, данные:", req.body);
+    
     try {
         const { email, password, displayName } = req.body;
-
-        // ЕСЛИ username не пришел с формы, берем в качестве username почту или displayName
         const username = req.body.username || email; 
 
-        // Проверка, что все обязательные поля есть
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Заполните все обязательные поля' });
+        console.log("2. Проверяем, есть ли уже такой пользователь...");
+        // Добавьте таймаут или проверьте этот запрос к БД:
+        const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        console.log("3. Проверка завершена, найдено строк:", userCheck.rows.length);
+
+        if (userCheck.rows.length > 0) {
+            return res.status(400).json({ error: 'Пользователь с таким email уже существует' });
         }
 
-        // ... дальше идет ваш код хэширования пароля и сохранения в базу данных ...
-        // Убедитесь, что в SQL-запрос INSERT передается переменная username:
-        // INSERT INTO users (username, email, display_name, password_hash) VALUES ($1, $2, $3, $4)
+        // ... ваш код дальше ...
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Ошибка сервера при регистрации' });
+        console.error("❌ ОШИБКА в /register:", err);
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
     }
 });
 /**
