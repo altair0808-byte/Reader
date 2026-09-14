@@ -1,0 +1,22 @@
+# render.yaml — Infrastructure as Code для Render.
+# Если положить этот файл в корень репозитория, Render сам подхватит
+# правильные настройки при следующем деплое (Root Directory, команды сборки/запуска),
+# и поле "Root Directory" в дашборде можно оставить пустым.
+
+services:
+  - type: web
+    name: ai-book-generator
+    runtime: node
+    plan: free
+    rootDir: .            # <-- если package.json лежит НЕ в корне репо, укажи здесь путь, например "backend"
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false        # задаётся вручную в дашборде / прокидывается из Render Postgres
+      - key: JWT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: NODE_VERSION
+        value: 20.11.1
