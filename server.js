@@ -61,6 +61,41 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 // Инициализируем БД и запускаем сервер
-initDB().then(() => {
-    app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
-});
+async function initDB() {
+  try {
+    // Создаем таблицу пользователей
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          username VARCHAR(255) UNIQUE NOT NULL,
+          email VARCHAR(255),
+          display_name VARCHAR(255),
+          password_hash VARCHAR(255) NOT NULL,
+          role VARCHAR(50) DEFAULT 'reader',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
+    `);
+
+    // <-- ВСТАВЛЯЕМ СЮДА создание таблицы для книг -->
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS books (
+          id SERIAL PRIMARY KEY,
+          user_id INT REFERENCES users(id) ON DELETE CASCADE,
+          title VARCHAR(255) NOT NULL,
+          genre VARCHAR(100),
+          prompt TEXT,
+          content TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    console.log("Таблицы 'users' и 'books' успешно проверены/обновлены");
+  } catch (err) {
+    console.error("Ошибка при создании таблиц:", err);
+  }
+}
