@@ -11,19 +11,26 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Функция автоматического создания таблицы пользователей при старте
+// Функция автоматического создания и обновления таблицы пользователей
 async function initDB() {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
           username VARCHAR(255) UNIQUE NOT NULL,
+          email VARCHAR(255),
           password_hash VARCHAR(255) NOT NULL,
           role VARCHAR(50) DEFAULT 'reader',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log("Таблица 'users' успешно проверена/создана");
+    
+    // Автоматически добавляем колонку email, если таблица уже была создана ранее без неё
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+    `);
+
+    console.log("Таблица 'users' успешно проверена/обновлена");
   } catch (err) {
     console.error("Ошибка при создании таблиц:", err);
   }
