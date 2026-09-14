@@ -1,3 +1,6 @@
+const pool = require('./db'); // <--- Добавьте это в самый верх authRoutes.js
+const express = require('express');
+const router = express.Router();
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
