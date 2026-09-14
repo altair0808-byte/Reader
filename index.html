@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>AI Книги</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="/auth-client.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen" x-data="homePage()" x-init="init()">
+
+<header class="bg-white border-b border-slate-200">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        <h1 class="font-bold text-slate-800">AI Книги</h1>
+        <nav class="flex items-center gap-4 text-sm" x-show="user">
+            <span class="text-slate-500" x-text="user?.display_name || user?.email"></span>
+            <a x-show="user && (user.role === 'admin' || user.role === 'superadmin')"
+               href="/create-book.html" class="text-blue-600 hover:underline">Создать книгу</a>
+            <a x-show="user && user.role === 'superadmin'"
+               href="/admin-users.html" class="text-blue-600 hover:underline">Пользователи</a>
+            <button @click="logout()" class="text-slate-500 hover:underline">Выйти</button>
+        </nav>
+        <nav x-show="!user" class="text-sm">
+            <a href="/login.html" class="text-blue-600 hover:underline">Войти</a>
+        </nav>
+    </div>
+</header>
+
+<main class="max-w-4xl mx-auto px-4 py-8">
+    <div x-show="loading" class="text-slate-400">Загрузка...</div>
+
+    <div x-show="!loading && books.length === 0" class="text-slate-400">
+        Книг пока нет.
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+        <template x-for="book in books" :key="book.id">
+            <a :href="`/reader.html?book_id=${book.id}&chapter=1`"
+               class="block bg-white rounded-xl border border-slate-200 p-4 hover:shadow-sm transition">
+                <p class="font-medium text-slate-800" x-text="book.title"></p>
+                <p class="text-sm text-slate-500 mt-1 line-clamp-2" x-text="book.short_description"></p>
+                <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-full"
+                      :class="{
+                          'bg-green-100 text-green-700': book.status === 'completed',
+                          'bg-amber-100 text-amber-700': book.status === 'generating',
+                          'bg-red-100 text-red-700': book.status === 'failed'
+                      }"
+                      x-text="{completed: 'Готова', generating: 'Генерируется', failed: 'Ошибка', draft: 'Черновик'}[book.status]"
+                ></span>
+            </a>
+        </template>
+    </div>
+</main>
+
+<script>
+function homePage() {
+    return {
+        user: null,
+        books: [],
+        loading: true,
+
+        async init() {
+            if (getToken()) {
+                const meRes = await authFetch('/api/users/me');
+                if (meRes.ok) this.user = (await meRes.json()).user;
+            }
+
+            const booksRes = await fetch('/api/books', {
+                headers: getToken() ? { Authorization: 'Bearer ' + getToken() } : {},
+            });
+            if (booksRes.ok) this.books = (await booksRes.json()).books;
+            this.loading = false;
+        },
+    };
+}
+</script>
+
+</body>
+</html>

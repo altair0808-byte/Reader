@@ -5,8 +5,8 @@
 <title>Режим чтения</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="/auth-client.js"></script>
 <style>
-    /* Темы фона читалки */
     .theme-light  { background: #ffffff; color: #1e293b; }
     .theme-dark   { background: #111827; color: #e5e7eb; }
     .theme-sepia  { background: #f4ecd8; color: #5b4636; }
@@ -16,7 +16,11 @@
 
 <div class="max-w-3xl mx-auto px-6 py-10">
 
-    <!-- Панель настроек читалки -->
+    <div class="flex items-center justify-between mb-4 text-sm">
+        <a href="/" class="opacity-70 hover:opacity-100">← Все книги</a>
+        <button @click="logout()" class="opacity-70 hover:opacity-100">Выйти</button>
+    </div>
+
     <div class="flex flex-wrap items-center gap-4 mb-8 p-4 rounded-xl border"
          :class="settings.theme === 'dark' ? 'border-slate-700' : 'border-slate-200'">
 
@@ -53,17 +57,18 @@
         </div>
     </div>
 
-    <!-- Текст главы -->
-    <div x-show="loading" class="opacity-60">Загрузка главы...</div>
+    <div x-show="!bookId" class="opacity-60">Книга не выбрана — вернись в каталог и выбери книгу.</div>
+    <div x-show="bookId && loading" class="opacity-60">Загрузка главы...</div>
+    <div x-show="bookId && !loading && !chapter.content" class="opacity-60">Эта глава ещё не сгенерирована.</div>
 
     <article
-        x-show="!loading"
+        x-show="chapter.content"
         :style="`font-family: ${settings.font_family}; font-size: ${settings.font_size}px; line-height: ${settings.line_height}`"
         class="whitespace-pre-line"
         x-text="chapter.content"
     ></article>
 
-    <div class="flex justify-between mt-10 text-sm">
+    <div x-show="bookId" class="flex justify-between mt-10 text-sm">
         <button @click="prevChapter()" class="underline opacity-70 hover:opacity-100">← Предыдущая глава</button>
         <button @click="nextChapter()" class="underline opacity-70 hover:opacity-100">Следующая глава →</button>
     </div>
@@ -84,14 +89,14 @@ function reader() {
         },
 
         async init() {
+            if (!requireAuthOrRedirect()) return;
             await this.loadMySettings();
-            await this.loadChapter();
+            if (this.bookId) await this.loadChapter();
+            else this.loading = false;
         },
 
         async loadMySettings() {
-            const res = await fetch('/api/users/me', {
-                headers: { Authorization: 'Bearer ' + getToken() },
-            });
+            const res = await authFetch('/api/users/me');
             if (res.ok) {
                 const data = await res.json();
                 this.settings = { ...this.settings, ...data.user.reader_settings };
@@ -100,23 +105,20 @@ function reader() {
 
         async loadChapter() {
             this.loading = true;
-            const res = await fetch(`/api/books/${this.bookId}/chapters/${this.chapterNumber}`, {
-                headers: { Authorization: 'Bearer ' + getToken() },
-            });
+            const res = await authFetch(`/api/books/${this.bookId}/chapters/${this.chapterNumber}`);
             if (res.ok) {
                 const data = await res.json();
                 this.chapter = data.chapter;
+            } else {
+                this.chapter = { content: '' };
             }
             this.loading = false;
         },
 
         async saveSettings() {
-            await fetch('/api/users/me/reader-settings', {
+            await authFetch('/api/users/me/reader-settings', {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: 'Bearer ' + getToken(),
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(this.settings),
             });
         },
@@ -132,10 +134,6 @@ function reader() {
             }
         },
     };
-}
-
-function getToken() {
-    return window.__AUTH_TOKEN__ || '';
 }
 </script>
 
