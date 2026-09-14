@@ -6,10 +6,36 @@ const { Pool } = require('pg');
 const app = express();
 
 // Настройка пула подключения к базе данных
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+require('dotenv').config();
+const express = require('express');
+const path = require('path');
+const pool = require('./db'); // <--- Подключаем из db.js
+
+const app = express();
+
+async function initDB() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          username VARCHAR(255) UNIQUE NOT NULL,
+          email VARCHAR(255),
+          display_name VARCHAR(255),
+          password_hash VARCHAR(255) NOT NULL,
+          role VARCHAR(50) DEFAULT 'reader',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
+    `);
+    console.log("Таблица 'users' успешно проверена/обновлена");
+  } catch (err) {
+    console.error("Ошибка при создании таблиц:", err);
+  }
+}
+// ... дальше идут ваши app.use и app.listen без изменений
 
 // Функция автоматического создания и обновления таблицы пользователей
 async function initDB() {
