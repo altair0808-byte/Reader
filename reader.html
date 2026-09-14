@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Режим чтения</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+    /* Темы фона читалки */
+    .theme-light  { background: #ffffff; color: #1e293b; }
+    .theme-dark   { background: #111827; color: #e5e7eb; }
+    .theme-sepia  { background: #f4ecd8; color: #5b4636; }
+</style>
+</head>
+<body class="min-h-screen" x-data="reader()" x-init="init()" :class="'theme-' + settings.theme">
+
+<div class="max-w-3xl mx-auto px-6 py-10">
+
+    <!-- Панель настроек читалки -->
+    <div class="flex flex-wrap items-center gap-4 mb-8 p-4 rounded-xl border"
+         :class="settings.theme === 'dark' ? 'border-slate-700' : 'border-slate-200'">
+
+        <div class="flex items-center gap-2">
+            <label class="text-sm opacity-70">Шрифт</label>
+            <select x-model="settings.font_family" @change="saveSettings()"
+                    class="text-sm rounded-lg border px-2 py-1 bg-transparent">
+                <option value="serif">Serif</option>
+                <option value="sans-serif">Sans-serif</option>
+                <option value="monospace">Monospace</option>
+            </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <label class="text-sm opacity-70">Размер</label>
+            <button @click="settings.font_size = Math.max(12, settings.font_size - 1); saveSettings()"
+                    class="w-7 h-7 rounded-lg border">−</button>
+            <span class="text-sm w-6 text-center" x-text="settings.font_size"></span>
+            <button @click="settings.font_size = Math.min(32, settings.font_size + 1); saveSettings()"
+                    class="w-7 h-7 rounded-lg border">+</button>
+        </div>
+
+        <div class="flex items-center gap-2 ml-auto">
+            <button @click="settings.theme = 'light'; saveSettings()"
+                    class="w-7 h-7 rounded-full bg-white border-2"
+                    :class="settings.theme === 'light' ? 'border-blue-500' : 'border-slate-300'"></button>
+            <button @click="settings.theme = 'sepia'; saveSettings()"
+                    class="w-7 h-7 rounded-full border-2"
+                    style="background:#f4ecd8"
+                    :class="settings.theme === 'sepia' ? 'border-blue-500' : 'border-slate-300'"></button>
+            <button @click="settings.theme = 'dark'; saveSettings()"
+                    class="w-7 h-7 rounded-full bg-slate-900 border-2"
+                    :class="settings.theme === 'dark' ? 'border-blue-500' : 'border-slate-600'"></button>
+        </div>
+    </div>
+
+    <!-- Текст главы -->
+    <div x-show="loading" class="opacity-60">Загрузка главы...</div>
+
+    <article
+        x-show="!loading"
+        :style="`font-family: ${settings.font_family}; font-size: ${settings.font_size}px; line-height: ${settings.line_height}`"
+        class="whitespace-pre-line"
+        x-text="chapter.content"
+    ></article>
+
+    <div class="flex justify-between mt-10 text-sm">
+        <button @click="prevChapter()" class="underline opacity-70 hover:opacity-100">← Предыдущая глава</button>
+        <button @click="nextChapter()" class="underline opacity-70 hover:opacity-100">Следующая глава →</button>
+    </div>
+</div>
+
+<script>
+function reader() {
+    return {
+        bookId: new URLSearchParams(location.search).get('book_id'),
+        chapterNumber: parseInt(new URLSearchParams(location.search).get('chapter') || '1', 10),
+        chapter: { content: '' },
+        loading: true,
+        settings: {
+            font_family: 'serif',
+            font_size: 18,
+            line_height: 1.6,
+            theme: 'light',
+        },
+
+        async init() {
+            await this.loadMySettings();
+            await this.loadChapter();
+        },
+
+        async loadMySettings() {
+            const res = await fetch('/api/users/me', {
+                headers: { Authorization: 'Bearer ' + getToken() },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                this.settings = { ...this.settings, ...data.user.reader_settings };
+            }
+        },
+
+        async loadChapter() {
+            this.loading = true;
+            const res = await fetch(`/api/books/${this.bookId}/chapters/${this.chapterNumber}`, {
+                headers: { Authorization: 'Bearer ' + getToken() },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                this.chapter = data.chapter;
+            }
+            this.loading = false;
+        },
+
+        async saveSettings() {
+            await fetch('/api/users/me/reader-settings', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + getToken(),
+                },
+                body: JSON.stringify(this.settings),
+            });
+        },
+
+        nextChapter() {
+            this.chapterNumber++;
+            this.loadChapter();
+        },
+        prevChapter() {
+            if (this.chapterNumber > 1) {
+                this.chapterNumber--;
+                this.loadChapter();
+            }
+        },
+    };
+}
+
+function getToken() {
+    return window.__AUTH_TOKEN__ || '';
+}
+</script>
+
+</body>
+</html>

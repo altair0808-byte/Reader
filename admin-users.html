@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Управление пользователями — SuperAdmin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<div x-data="userAdminPanel()" x-init="loadUsers()" class="max-w-4xl mx-auto py-10 px-4">
+
+    <h1 class="text-2xl font-bold text-slate-800 mb-1">Управление пользователями</h1>
+    <p class="text-slate-500 mb-6">Назначайте или снимайте роль «Администратор». Доступно только Суперадмину.</p>
+
+    <div x-show="error" x-text="error" class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg"></div>
+
+    <div x-show="loading" class="text-slate-400">Загрузка...</div>
+
+    <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-slate-200 divide-y">
+        <template x-for="user in users" :key="user.id">
+            <div class="flex items-center justify-between px-5 py-4">
+                <div>
+                    <p class="font-medium text-slate-800" x-text="user.display_name || user.email"></p>
+                    <p class="text-sm text-slate-500" x-text="user.email"></p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <span
+                        class="text-xs px-2 py-1 rounded-full font-medium"
+                        :class="{
+                            'bg-purple-100 text-purple-700': user.role === 'superadmin',
+                            'bg-blue-100 text-blue-700': user.role === 'admin',
+                            'bg-slate-100 text-slate-600': user.role === 'reader'
+                        }"
+                        x-text="roleLabel(user.role)"
+                    ></span>
+
+                    <button
+                        x-show="user.role === 'reader'"
+                        @click="changeRole(user, 'admin')"
+                        class="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+                    >
+                        Сделать админом
+                    </button>
+
+                    <button
+                        x-show="user.role === 'admin'"
+                        @click="changeRole(user, 'reader')"
+                        class="text-sm px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                    >
+                        Разжаловать
+                    </button>
+
+                    <span
+                        x-show="user.role === 'superadmin'"
+                        class="text-sm text-slate-400 italic"
+                    >недоступно</span>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function userAdminPanel() {
+    return {
+        users: [],
+        loading: true,
+        error: null,
+
+        async loadUsers() {
+            this.loading = true;
+            this.error = null;
+            try {
+                const res = await fetch('/api/admin/users', {
+                    headers: { Authorization: 'Bearer ' + getToken() },
+                });
+                if (!res.ok) throw new Error((await res.json()).error || 'Ошибка загрузки');
+                const data = await res.json();
+                this.users = data.users;
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async changeRole(user, newRole) {
+            const previousRole = user.role;
+            user.role = newRole; // оптимистичное обновление UI
+            try {
+                const res = await fetch(`/api/admin/users/${user.id}/role`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + getToken(),
+                    },
+                    body: JSON.stringify({ role: newRole }),
+                });
+                if (!res.ok) throw new Error((await res.json()).error || 'Не удалось изменить роль');
+            } catch (e) {
+                user.role = previousRole; // откат при ошибке
+                this.error = e.message;
+            }
+        },
+
+        roleLabel(role) {
+            return { superadmin: 'Суперадмин', admin: 'Админ', reader: 'Читатель' }[role] || role;
+        },
+    };
+}
+
+function getToken() {
+    // Токен приходит из вашего auth-флоу (cookie/сессионное хранилище на сервере рендеринга и т.п.)
+    return window.__AUTH_TOKEN__ || '';
+}
+</script>
+
+</body>
+</html>
