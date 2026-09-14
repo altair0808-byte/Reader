@@ -63,4 +63,44 @@ router.post('/register', async (req, res) => {
     }
 });
 
+// Роут входа (авторизации)
+router.post('/login', async (req, res) => {
+    console.log("🔥 Начало входа, данные:", req.body);
+    
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Заполните email и пароль' });
+        }
+
+        // Ищем пользователя в базе
+        const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (userCheck.rows.length === 0) {
+            return res.status(400).json({ error: 'Пользователь с таким email не найден' });
+        }
+
+        const user = userCheck.rows[0];
+
+        // Проверяем пароль
+        const isValidPassword = verifyPassword(password, user.password_hash);
+        if (!isValidPassword) {
+            return res.status(400).json({ error: 'Неверный пароль' });
+        }
+
+        // Генерируем JWT токен
+        const token = jwt.sign(
+            { id: user.id, username: user.username, role: user.role },
+            process.env.JWT_SECRET || 'secret_key_fallback',
+            { expiresIn: '24h' }
+        );
+
+        res.json({ token, user: { id: user.id, username: user.username, email: user.email, role: user.role } });
+
+    } catch (err) {
+        console.error("❌ ОШИБКА в /login:", err);
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    }
+});
+
 module.exports = router;
