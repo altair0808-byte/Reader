@@ -53,7 +53,12 @@ router.get('/:id/chapters/:chapterNumber', authenticate, async (req, res, next) 
  * Доступно только admin/superadmin.
  */
 router.post('/', authenticate, requireAdminOrAbove, async (req, res, next) => {
-    const { shortDescription, genre, chaptersCount = 10 } = req.body;
+    const {
+        shortDescription,
+        genre,
+        chaptersCount = 10,
+        useWebEnrichment = false, // включать веб-поиск фактов (историческая/нон-фикшн тематика)
+    } = req.body;
 
     if (!shortDescription || shortDescription.trim().length < 10) {
         return res.status(400).json({
@@ -61,11 +66,15 @@ router.post('/', authenticate, requireAdminOrAbove, async (req, res, next) => {
         });
     }
 
+    if (chaptersCount < 1 || chaptersCount > 40) {
+        return res.status(400).json({ error: 'Количество глав должно быть от 1 до 40' });
+    }
+
     try {
         const { rows } = await db.query(
             `INSERT INTO books (title, short_description, genre, status,
-                                 total_chapters_plan, created_by)
-             VALUES ($1, $2, $3, 'generating', $4, $5)
+                                 total_chapters_plan, created_by, use_web_enrichment)
+             VALUES ($1, $2, $3, 'generating', $4, $5, $6)
              RETURNING *`,
             [
                 shortDescription.slice(0, 60), // временный тайтл, LLM его переопределит
@@ -73,6 +82,7 @@ router.post('/', authenticate, requireAdminOrAbove, async (req, res, next) => {
                 genre || null,
                 chaptersCount,
                 req.user.id,
+                useWebEnrichment,
             ]
         );
 
