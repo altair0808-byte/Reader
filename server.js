@@ -10,6 +10,7 @@ app.use(express.json());
 // Подключаем только существующие роуты
 app.use('/api/auth', require('./authRoutes'));
 app.use('/api/books', require('./books'));
+app.use('/api/users', require('./users'));
 
 // Функция автоматического создания таблиц
 async function initDB() {
@@ -29,6 +30,7 @@ async function initDB() {
     await pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reader_settings JSONB DEFAULT '{}';
     `);
 
     await pool.query(`
