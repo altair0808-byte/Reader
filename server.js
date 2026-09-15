@@ -25,7 +25,7 @@ async function initDB() {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    
+
     await pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
@@ -40,6 +40,34 @@ async function initDB() {
           prompt TEXT,
           content TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Колонки, которые ожидает bookGenerator.js (генерация по главам,
+    // статус, веб-обогащение фактами) — добавляем, если их ещё нет,
+    // чтобы не потерять уже существующие книги.
+    await pool.query(`
+      ALTER TABLE books ADD COLUMN IF NOT EXISTS short_description TEXT;
+      ALTER TABLE books ADD COLUMN IF NOT EXISTS total_chapters_plan INT DEFAULT 5;
+      ALTER TABLE books ADD COLUMN IF NOT EXISTS use_web_enrichment BOOLEAN DEFAULT FALSE;
+      ALTER TABLE books ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'draft';
+      ALTER TABLE books ADD COLUMN IF NOT EXISTS enrichment_sources JSONB DEFAULT '[]';
+      ALTER TABLE books ADD COLUMN IF NOT EXISTS generation_error TEXT;
+    `);
+
+    // Главы книги — генерируются и сохраняются по одной через bookGenerator.js
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chapters (
+          id SERIAL PRIMARY KEY,
+          book_id INT REFERENCES books(id) ON DELETE CASCADE,
+          chapter_number INT NOT NULL,
+          title VARCHAR(255),
+          content TEXT,
+          summary TEXT,
+          word_count INT,
+          status VARCHAR(50) DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (book_id, chapter_number)
       );
     `);
 
