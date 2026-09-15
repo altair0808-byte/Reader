@@ -103,4 +103,41 @@ router.get('/:id/chapters', authenticateToken, async (req, res) => {
     }
 });
 
+// Роут для загрузки ГОТОВОЙ книги (без ИИ) — например, книги, написанной
+// самим пользователем или взятой из другого источника. Весь текст
+// сохраняется как одна законченная глава.
+router.post('/upload', authenticateToken, async (req, res) => {
+    try {
+        const { title, genre, content } = req.body;
+        const userId = req.user.id;
+
+        if (!title || !content || !content.trim()) {
+            return res.status(400).json({ error: 'Укажите название и текст книги' });
+        }
+
+        const inserted = await pool.query(
+            `INSERT INTO books
+                (user_id, title, genre, short_description, status, total_chapters_plan)
+             VALUES ($1, $2, $3, $4, 'completed', 1)
+             RETURNING *`,
+            [userId, title, genre || 'Общий', content.slice(0, 300)]
+        );
+
+        const book = inserted.rows[0];
+        const wordCount = content.trim().split(/\s+/).length;
+
+        await pool.query(
+            `INSERT INTO chapters (book_id, chapter_number, title, content, word_count, status)
+             VALUES ($1, 1, $2, $3, $4, 'completed')`,
+            [book.id, title, content, wordCount]
+        );
+
+        res.status(201).json({ message: 'Книга успешно загружена!', book });
+
+    } catch (err) {
+        console.error("❌ ОШИБКА загрузки книги:", err);
+        res.status(500).json({ error: 'Ошибка сервера при загрузке книги' });
+    }
+});
+
 module.exports = router;

@@ -9,12 +9,26 @@
 </head>
 <body class="bg-slate-50 min-h-screen p-6">
     <div class="max-w-xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-6" x-data="bookForm()">
-        <h1 class="text-2xl font-bold text-slate-800 mb-4">Создать новую книгу с ИИ</h1>
-        
+
+        <div class="flex gap-2 mb-6 border-b border-slate-200">
+            <button type="button" @click="tab = 'generate'"
+                    class="px-4 py-2 text-sm font-medium border-b-2 transition"
+                    :class="tab === 'generate' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'">
+                Сгенерировать с ИИ
+            </button>
+            <button type="button" @click="tab = 'upload'"
+                    class="px-4 py-2 text-sm font-medium border-b-2 transition"
+                    :class="tab === 'upload' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'">
+                Загрузить готовую книгу
+            </button>
+        </div>
+
         <div x-show="error" x-text="error" class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm"></div>
         <div x-show="success" x-text="success" class="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm"></div>
 
-        <form @submit.prevent="generate()" class="space-y-4">
+        <!-- ГЕНЕРАЦИЯ С ИИ -->
+        <form x-show="tab === 'generate'" @submit.prevent="generate()" class="space-y-4">
+            <h1 class="text-xl font-bold text-slate-800 mb-2">Создать новую книгу с ИИ</h1>
             <div>
                 <label class="text-sm text-slate-600">Название книги</label>
                 <input type="text" x-model="title" required class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -27,8 +41,37 @@
                 <label class="text-sm text-slate-600">Опишите сюжет или идею для ИИ</label>
                 <textarea x-model="prompt" rows="4" required placeholder="О чем должна быть книга, главные герои..." class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"></textarea>
             </div>
+            <div>
+                <label class="text-sm text-slate-600">Количество глав</label>
+                <input type="number" x-model.number="chaptersCount" min="1" max="20" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            </div>
             <button type="submit" :disabled="loading" class="w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-50">
-                <span x-text="loading ? 'Генерируем книгу...' : 'Сгенерировать книгу'"></span>
+                <span x-text="loading ? 'Запускаем генерацию...' : 'Сгенерировать книгу'"></span>
+            </button>
+            <p class="text-xs text-slate-400">Генерация книги идёт в фоне и может занять несколько минут — она появится в списке на главной странице со статусом «Генерируется».</p>
+        </form>
+
+        <!-- ЗАГРУЗКА ГОТОВОЙ КНИГИ -->
+        <form x-show="tab === 'upload'" @submit.prevent="upload()" class="space-y-4">
+            <h1 class="text-xl font-bold text-slate-800 mb-2">Загрузить готовую книгу</h1>
+            <div>
+                <label class="text-sm text-slate-600">Название книги</label>
+                <input type="text" x-model="uploadTitle" required class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="text-sm text-slate-600">Жанр</label>
+                <input type="text" x-model="uploadGenre" placeholder="Фэнтези, детектив..." class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="text-sm text-slate-600">Текстовый файл (.txt) или вставьте текст ниже</label>
+                <input type="file" accept=".txt" @change="onFileSelected($event)" class="w-full mt-1 text-sm">
+            </div>
+            <div>
+                <label class="text-sm text-slate-600">Текст книги</label>
+                <textarea x-model="uploadContent" rows="10" required placeholder="Вставьте полный текст книги..." class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"></textarea>
+            </div>
+            <button type="submit" :disabled="loading" class="w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-50">
+                <span x-text="loading ? 'Загружаем...' : 'Загрузить книгу'"></span>
             </button>
         </form>
     </div>
@@ -36,18 +79,36 @@
     <script>
     function bookForm() {
         return {
+            tab: 'generate',
+
+            // Генерация с ИИ
             title: '',
             genre: '',
             prompt: '',
+            chaptersCount: 5,
+
+            // Загрузка готовой книги
+            uploadTitle: '',
+            uploadGenre: '',
+            uploadContent: '',
+
             loading: false,
             error: null,
             success: null,
+
+            onFileSelected(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => { this.uploadContent = e.target.result; };
+                reader.readAsText(file, 'UTF-8');
+            },
 
             async generate() {
                 this.loading = true;
                 this.error = null;
                 this.success = null;
-                
+
                 const token = getToken(); // Берется из auth-client.js
 
                 try {
@@ -57,14 +118,52 @@
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`
                         },
-                        body: JSON.stringify({ title: this.title, genre: this.genre, prompt: this.prompt })
+                        body: JSON.stringify({
+                            title: this.title,
+                            genre: this.genre,
+                            prompt: this.prompt,
+                            chapters: this.chaptersCount
+                        })
                     });
 
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || 'Ошибка генерации');
 
-                    this.success = 'Книга успешно создана!';
-                    setTimeout(() => location.href = '/reader.html', 1500);
+                    this.success = 'Генерация запущена! Книга появится в списке на главной странице.';
+                    setTimeout(() => location.href = '/', 1500);
+                } catch (e) {
+                    this.error = e.message;
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            async upload() {
+                this.loading = true;
+                this.error = null;
+                this.success = null;
+
+                const token = getToken();
+
+                try {
+                    const res = await fetch('/api/books/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            title: this.uploadTitle,
+                            genre: this.uploadGenre,
+                            content: this.uploadContent
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
+
+                    this.success = 'Книга успешно загружена!';
+                    setTimeout(() => location.href = '/', 1500);
                 } catch (e) {
                     this.error = e.message;
                 } finally {
