@@ -48,10 +48,11 @@ router.post('/register', async (req, res) => {
 
         const user = newUser.rows[0];
 
-        // Генерируем JWT токен
+        // Генерируем JWT токен. Поле "sub" (а не "id") — потому что
+        // auth.js читает payload.sub при проверке токена на каждый запрос.
         const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            process.env.JWT_SECRET || 'secret_key_fallback',
+            { sub: user.id, username: user.username, role: user.role },
+            process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
 
@@ -88,10 +89,10 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Неверный пароль' });
         }
 
-        // Генерируем JWT токен
+        // Генерируем JWT токен. Поле "sub" — см. комментарий в /register.
         const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            process.env.JWT_SECRET || 'secret_key_fallback',
+            { sub: user.id, username: user.username, role: user.role },
+            process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
 
