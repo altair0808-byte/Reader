@@ -1,28 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('./db');
-const jwt = require('jsonwebtoken');
+const { authenticate } = require('./auth');
 const { generateBookAsync } = require('./bookGenerator');
-
-// Промежуточный слой (middleware) для проверки авторизации по токену
-function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-
-    jwt.verify(token, process.env.JWT_SECRET || 'secret_key_fallback', (err, user) => {
-        if (err) return res.status(403).json({ error: 'Недействительный токен' });
-        req.user = user;
-        next();
-    });
-}
 
 // Роут для создания книги — запускает НАСТОЯЩУЮ генерацию через Gemini
 // (bookGenerator.js), а не заглушку. Отвечаем сразу, генерация идёт в фоне,
 // т.к. может занимать несколько минут (пауза между запросами к Gemini +
 // генерация каждой главы по отдельности).
-router.post('/generate', authenticateToken, async (req, res) => {
+router.post('/generate', authenticate, async (req, res) => {
     try {
         const { title, prompt, genre, chapters, use_web_enrichment } = req.body;
         const userId = req.user.id;
@@ -57,7 +43,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
 });
 
 // Роут для получения списка книг текущего пользователя
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticate, async (req, res) => {
     try {
         const books = await pool.query(
             `SELECT id, title, genre, status, short_description, created_at
@@ -72,7 +58,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Роут для проверки статуса одной книги (для поллинга во время генерации)
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticate, async (req, res) => {
     try {
         const { rows } = await pool.query(
             'SELECT * FROM books WHERE id = $1 AND user_id = $2',
@@ -87,7 +73,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Роут для получения глав книги
-router.get('/:id/chapters', authenticateToken, async (req, res) => {
+router.get('/:id/chapters', authenticate, async (req, res) => {
     try {
         const book = await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
         if (!book.rows[0]) return res.status(404).json({ error: 'Книга не найдена' });
@@ -106,7 +92,7 @@ router.get('/:id/chapters', authenticateToken, async (req, res) => {
 // Роут для загрузки ГОТОВОЙ книги (без ИИ) — например, книги, написанной
 // самим пользователем или взятой из другого источника. Весь текст
 // сохраняется как одна законченная глава.
-router.post('/upload', authenticateToken, async (req, res) => {
+router.post('/upload', authenticate, async (req, res) => {
     try {
         const { title, genre, content } = req.body;
         const userId = req.user.id;
