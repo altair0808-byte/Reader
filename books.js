@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('./db');
 const jwt = require('jsonwebtoken');
+const { generateBookAsync } = require('./bookGenerator');
 
 // Промежуточный слой (middleware) для проверки авторизации по токену
 function authenticateToken(req, res, next) {
@@ -17,28 +18,40 @@ function authenticateToken(req, res, next) {
     });
 }
 
-// Роут для создания книги
+// Роут для создания книги — запускает НАСТОЯЩУЮ генерацию через Gemini
+// (bookGenerator.js), а не заглушку. Отвечаем сразу, генерация идёт в фоне,
+// т.к. может занимать несколько минут (пауза между запросами к Gemini +
+// генерация каждой главы по отдельности).
 router.post('/generate', authenticateToken, async (req, res) => {
     try {
-        const { title, prompt, genre } = req.body;
+        const { title, prompt, genre, chapters, use_web_enrichment } = req.body;
         const userId = req.user.id;
 
         if (!title || !prompt) {
             return res.status(400).json({ error: 'Укажите название и описание (промпт) для книги' });
         }
 
-        const generatedContent = `Глава 1. Начало пути.\n\nЭта книга была сгенерирована искусственным интеллектом на основе вашего запроса: "${prompt}".\n\nЖанр: ${genre || 'Художественная литература'}.\n\nЗдесь будет разворачиваться увлекательный сюжет...`;
+        const chaptersCount = Number.isInteger(chapters) && chapters > 0 ? chapters : 5;
 
-        const newBook = await pool.query(
-            `INSERT INTO books (user_id, title, genre, content, prompt) 
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [userId, title, genre || 'Общий', generatedContent, prompt]
+        const inserted = await pool.query(
+            `INSERT INTO books
+                (user_id, title, genre, prompt, short_description, total_chapters_plan, use_web_enrichment, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'generating')
+             RETURNING *`,
+            [userId, title, genre || 'Общий', prompt, prompt, chaptersCount, !!use_web_enrichment]
         );
 
-        res.json({ message: 'Книга успешно создана!', book: newBook.rows[0] });
+        const book = inserted.rows[0];
+
+        // Не ждём завершения генерации — отвечаем клиенту сразу.
+        generateBookAsync(book.id).catch((err) => {
+            console.error(`❌ Генерация книги #${book.id} упала:`, err);
+        });
+
+        res.status(202).json({ message: 'Генерация книги запущена', book });
 
     } catch (err) {
-        console.error("❌ ОШИБКА генерации книги:", err);
+        console.error("❌ ОШИБКА запуска генерации книги:", err);
         res.status(500).json({ error: 'Ошибка сервера при генерации книги' });
     }
 });
@@ -46,11 +59,47 @@ router.post('/generate', authenticateToken, async (req, res) => {
 // Роут для получения списка книг текущего пользователя
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const books = await pool.query('SELECT id, title, genre, created_at FROM books WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
-        res.json(books.rows);
+        const books = await pool.query(
+            `SELECT id, title, genre, status, short_description, created_at
+             FROM books WHERE user_id = $1 ORDER BY created_at DESC`,
+            [req.user.id]
+        );
+        res.json({ books: books.rows });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Ошибка получения книг' });
+    }
+});
+
+// Роут для проверки статуса одной книги (для поллинга во время генерации)
+router.get('/:id', authenticateToken, async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            'SELECT * FROM books WHERE id = $1 AND user_id = $2',
+            [req.params.id, req.user.id]
+        );
+        if (!rows[0]) return res.status(404).json({ error: 'Книга не найдена' });
+        res.json({ book: rows[0] });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка получения книги' });
+    }
+});
+
+// Роут для получения глав книги
+router.get('/:id/chapters', authenticateToken, async (req, res) => {
+    try {
+        const book = await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        if (!book.rows[0]) return res.status(404).json({ error: 'Книга не найдена' });
+
+        const chapters = await pool.query(
+            'SELECT id, chapter_number, title, content, status, word_count FROM chapters WHERE book_id = $1 ORDER BY chapter_number',
+            [req.params.id]
+        );
+        res.json({ chapters: chapters.rows });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка получения глав' });
     }
 });
 
