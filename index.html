@@ -6,42 +6,82 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script src="/auth-client.js"></script>
+<style>
+    .theme-light  { background: #f8fafc; color: #1e293b; }
+    .theme-dark   { background: #111827; color: #e5e7eb; }
+    .theme-gray   { background: #4b5563; color: #f8fafc; }
+    .theme-sepia  { background: #f4ecd8; color: #5b4636; }
+    .theme-ocean  { background: #0f2942; color: #cde6f5; }
+</style>
 </head>
-<body class="bg-slate-50 min-h-screen" x-data="homePage()" x-init="init()">
+<body class="min-h-screen" x-data="homePage()" x-init="init()" :class="'theme-' + settings.theme">
 
-<header class="bg-white border-b border-slate-200">
-    <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-        <h1 class="font-bold text-slate-800">AI Книги</h1>
-        <nav class="flex items-center gap-4 text-sm" x-show="user">
-            <span class="text-slate-500" x-text="user?.display_name || user?.email"></span>
+<header class="border-b" :class="isDarkTheme ? 'border-white/10' : 'border-slate-200'">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between flex-wrap gap-3">
+        <h1 class="font-bold">AI Книги</h1>
+        <nav class="flex items-center gap-4 text-sm flex-wrap" x-show="user">
+            <span class="opacity-70" x-text="user?.display_name || user?.email"></span>
             <a x-show="user"
-               href="/create-book.html" class="text-blue-600 hover:underline">Создать книгу</a>
+               href="/create-book.html" class="text-blue-500 hover:underline">Создать книгу</a>
             <a x-show="user && user.role === 'superadmin'"
-               href="/admin-users.html" class="text-blue-600 hover:underline">Пользователи</a>
-            <button @click="logout()" class="text-slate-500 hover:underline">Выйти</button>
+               href="/admin-users.html" class="text-blue-500 hover:underline">Пользователи</a>
+
+            <div class="flex items-center gap-1">
+                <button @click="settings.theme = 'light'; saveSettings()"
+                        class="w-6 h-6 rounded-full bg-white border-2"
+                        :class="settings.theme === 'light' ? 'border-blue-500' : 'border-slate-300'"></button>
+                <button @click="settings.theme = 'sepia'; saveSettings()"
+                        class="w-6 h-6 rounded-full border-2"
+                        style="background:#f4ecd8"
+                        :class="settings.theme === 'sepia' ? 'border-blue-500' : 'border-slate-300'"></button>
+                <button @click="settings.theme = 'dark'; saveSettings()"
+                        class="w-6 h-6 rounded-full bg-slate-900 border-2"
+                        :class="settings.theme === 'dark' ? 'border-blue-400' : 'border-slate-500'"></button>
+                <button @click="settings.theme = 'gray'; saveSettings()"
+                        class="w-6 h-6 rounded-full border-2"
+                        style="background:#4b5563"
+                        :class="settings.theme === 'gray' ? 'border-blue-400' : 'border-slate-500'"></button>
+                <button @click="settings.theme = 'ocean'; saveSettings()"
+                        class="w-6 h-6 rounded-full border-2"
+                        style="background:#0f2942"
+                        :class="settings.theme === 'ocean' ? 'border-blue-400' : 'border-slate-500'"></button>
+            </div>
+
+            <button @click="logout()" class="opacity-70 hover:underline">Выйти</button>
         </nav>
         <nav x-show="!user" class="text-sm">
-            <a href="/login.html" class="text-blue-600 hover:underline">Войти</a>
+            <a href="/login.html" class="text-blue-500 hover:underline">Войти</a>
         </nav>
     </div>
 </header>
 
 <main class="max-w-4xl mx-auto px-4 py-8">
-    <div x-show="loading" class="text-slate-400">Загрузка...</div>
+    <div x-show="!loading && books.length > 0" class="flex items-center gap-2 mb-4 text-sm">
+        <label class="opacity-70">Сортировка:</label>
+        <select x-model="sortBy" class="text-sm rounded-lg border px-2 py-1 bg-transparent"
+                :class="isDarkTheme ? 'border-white/20' : 'border-slate-300'">
+            <option value="date_desc">Сначала новые</option>
+            <option value="date_asc">Сначала старые</option>
+            <option value="genre">По жанру (А-Я)</option>
+        </select>
+    </div>
 
-    <div x-show="!loading && books.length === 0" class="text-slate-400">
+    <div x-show="loading" class="opacity-60">Загрузка...</div>
+
+    <div x-show="!loading && books.length === 0" class="opacity-60">
         Книг пока нет.
     </div>
 
     <div class="grid sm:grid-cols-2 gap-4">
-        <template x-for="book in books" :key="book.id">
-            <div class="relative block bg-white rounded-xl border border-slate-200 p-4 hover:shadow-sm transition">
+        <template x-for="book in sortedBooks" :key="book.id">
+            <div class="relative block rounded-xl border p-4 hover:shadow-sm transition"
+                 :class="isDarkTheme ? 'bg-black/20 border-white/10' : 'bg-white border-slate-200'">
                 <button x-show="isAdmin" @click="deleteBook(book)"
                         class="absolute top-3 right-3 text-xs text-red-500 hover:underline">Удалить</button>
                 <a :href="`/book.html?book_id=${book.id}`" class="block pr-14">
-                    <p class="font-medium text-slate-800" x-text="book.title"></p>
-                    <p class="text-sm text-slate-500 mt-1 line-clamp-2" x-text="book.short_description"></p>
-                    <p x-show="isAdmin && book.owner_name" class="text-xs text-slate-400 mt-1" x-text="'Автор: ' + book.owner_name"></p>
+                    <p class="font-medium" x-text="book.title"></p>
+                    <p class="text-sm opacity-70 mt-1 line-clamp-2" x-text="book.short_description"></p>
+                    <p x-show="isAdmin && book.owner_name" class="text-xs opacity-50 mt-1" x-text="'Автор: ' + book.owner_name"></p>
                     <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-full"
                           :class="{
                               'bg-green-100 text-green-700': book.status === 'completed',
@@ -62,15 +102,38 @@ function homePage() {
         user: null,
         books: [],
         loading: true,
+        sortBy: 'date_desc',
+        settings: { theme: 'light' },
 
         get isAdmin() {
             return this.user && (this.user.role === 'admin' || this.user.role === 'superadmin');
         },
 
+        get isDarkTheme() {
+            return ['dark', 'gray', 'ocean'].includes(this.settings.theme);
+        },
+
+        get sortedBooks() {
+            const list = [...this.books];
+            if (this.sortBy === 'date_desc') {
+                list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            } else if (this.sortBy === 'date_asc') {
+                list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            } else if (this.sortBy === 'genre') {
+                list.sort((a, b) => (a.genre || '').localeCompare(b.genre || '', 'ru'));
+            }
+            return list;
+        },
+
         async init() {
             if (getToken()) {
                 const meRes = await authFetch('/api/users/me');
-                if (meRes.ok) this.user = (await meRes.json()).user;
+                if (meRes.ok) {
+                    this.user = (await meRes.json()).user;
+                    if (this.user.reader_settings?.theme) {
+                        this.settings.theme = this.user.reader_settings.theme;
+                    }
+                }
             }
 
             await this.loadBooks();
@@ -82,6 +145,14 @@ function homePage() {
                 headers: getToken() ? { Authorization: 'Bearer ' + getToken() } : {},
             });
             if (booksRes.ok) this.books = (await booksRes.json()).books;
+        },
+
+        async saveSettings() {
+            await authFetch('/api/users/me/reader-settings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ theme: this.settings.theme }),
+            });
         },
 
         async deleteBook(book) {

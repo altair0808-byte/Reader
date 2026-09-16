@@ -159,11 +159,14 @@ async function generateBookPlan(shortDescription, chaptersCount, enrichment) {
     const system = `Ты — опытный писатель и редактор. Составь подробное оглавление
 для книги на основе краткого описания. Разбей сюжет ровно на ${chaptersCount} глав
 с чёткой драматургической аркой (завязка, развитие, кульминация, развязка).
-Также напиши привлекательную аннотацию книги (как на обложке) — 3-5 предложений,
-которая заинтересует читателя, но не раскрывает всю интригу.
+Также напиши:
+1) короткую затравку в одно предложение (до 20 слов) — для карточки книги в каталоге;
+2) привлекательную аннотацию книги (как на обложке) — 3-5 предложений,
+которая заинтересует читателя, но не раскрывает всю интригу — для страницы книги.
 Ответь ТОЛЬКО валидным JSON, без пояснений и markdown-разметки, в формате:
 {
   "title": "Название книги",
+  "short_description": "Короткая затравка в одно предложение (до 20 слов)",
   "description": "Аннотация книги для читателей (3-5 предложений)",
   "chapters": [
     {"number": 1, "title": "Название главы", "summary": "Краткое содержание главы (3-5 предложений)"}
@@ -241,7 +244,10 @@ async function generateBookAsync(bookId) {
         }
 
         const plan = await generateBookPlan(book.short_description, book.total_chapters_plan, enrichment);
-        await db.query('UPDATE books SET title = $1, description = $2 WHERE id = $3', [plan.title, plan.description || null, bookId]);
+        await db.query(
+            'UPDATE books SET title = $1, description = $2, short_description = $3 WHERE id = $4',
+            [plan.title, plan.description || null, plan.short_description || book.short_description, bookId]
+        );
         book.title = plan.title;
 
         const previousSummaries = [];
