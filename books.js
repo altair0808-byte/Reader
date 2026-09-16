@@ -58,7 +58,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Роут для проверки статуса одной книги (для поллинга во время генерации)
-router.get('/:id/chapters/:number', authenticate, async (req, res) => {
+router.get('/:id', authenticate, async (req, res) => {
     try {
         const { rows } = await pool.query(
             'SELECT * FROM books WHERE id = $1 AND user_id = $2',
@@ -86,6 +86,27 @@ router.get('/:id/chapters', authenticate, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Ошибка получения глав' });
+    }
+});
+
+// Роут для получения ОДНОЙ главы по номеру — именно его использует reader.html
+// (GET /api/books/:id/chapters/:chapterNumber), в отличие от роута выше,
+// который отдаёт сразу все главы списком.
+router.get('/:id/chapters/:number', authenticate, async (req, res) => {
+    try {
+        const book = await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        if (!book.rows[0]) return res.status(404).json({ error: 'Книга не найдена' });
+
+        const { rows } = await pool.query(
+            'SELECT id, chapter_number, title, content, status, word_count FROM chapters WHERE book_id = $1 AND chapter_number = $2',
+            [req.params.id, req.params.number]
+        );
+        if (!rows[0]) return res.status(404).json({ error: 'Глава не найдена' });
+
+        res.json({ chapter: rows[0] });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка получения главы' });
     }
 });
 
