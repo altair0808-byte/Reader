@@ -46,9 +46,10 @@ async function callGemini({ system, prompt, tools, maxTokens = 4096 }, attempt =
     // чтобы держаться в рамках RPM бесплатного тира.
     await sleep(MIN_DELAY_MS);
 
-    if (res.status === 429 && attempt <= 5) {
+    if ((res.status === 429 || res.status === 503) && attempt <= 5) {
+        const reason = res.status === 429 ? 'лимит запросов' : 'модель перегружена';
         const backoff = MIN_DELAY_MS * attempt * 2;
-        console.warn(`Gemini 429 (лимит запросов), попытка ${attempt}, жду ${backoff}мс`);
+        console.warn(`Gemini ${res.status} (${reason}), попытка ${attempt}, жду ${backoff}мс`);
         await sleep(backoff);
         return callGemini({ system, prompt, tools, maxTokens }, attempt + 1);
     }
