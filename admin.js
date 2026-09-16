@@ -38,7 +38,9 @@ router.patch('/users/:id/role', async (req, res, next) => {
         });
     }
 
-    if (id === req.user.id) {
+    // req.params.id — строка, req.user.id — число из БД. Сравниваем как числа,
+    // иначе проверка "нельзя менять свою роль" никогда не сработает.
+    if (Number(id) === req.user.id) {
         return res.status(400).json({ error: 'Нельзя менять собственную роль' });
     }
 
@@ -65,6 +67,33 @@ router.patch('/users/:id/role', async (req, res, next) => {
         );
 
         res.json({ user: rows[0] });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * DELETE /api/admin/users/:id
+ * Удаление пользователя. Нельзя удалить себя или суперадмина.
+ */
+router.delete('/users/:id', async (req, res, next) => {
+    const { id } = req.params;
+
+    if (Number(id) === req.user.id) {
+        return res.status(400).json({ error: 'Нельзя удалить самого себя' });
+    }
+
+    try {
+        const { rows: targetRows } = await db.query('SELECT id, role FROM users WHERE id = $1', [id]);
+        if (targetRows.length === 0) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+        if (targetRows[0].role === 'superadmin') {
+            return res.status(403).json({ error: 'Нельзя удалить суперадмина' });
+        }
+
+        await db.query('DELETE FROM users WHERE id = $1', [id]);
+        res.json({ message: 'Пользователь удалён' });
     } catch (err) {
         next(err);
     }

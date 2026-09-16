@@ -17,7 +17,7 @@
     </div>
 
     <h1 class="text-2xl font-bold text-slate-800 mb-1">Управление пользователями</h1>
-    <p class="text-slate-500 mb-6">Назначайте или снимайте роль «Администратор». Доступно только Суперадмину.</p>
+    <p class="text-slate-500 mb-6">Назначайте или снимайте роль «Администратор», удаляйте пользователей. Доступно только Суперадмину.</p>
 
     <div x-show="error" x-text="error" class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg"></div>
 
@@ -56,6 +56,14 @@
                         class="text-sm px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
                     >
                         Разжаловать
+                    </button>
+
+                    <button
+                        x-show="u.role !== 'superadmin'"
+                        @click="deleteUser(u)"
+                        class="text-sm px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition"
+                    >
+                        Удалить
                     </button>
 
                     <span
@@ -108,6 +116,20 @@ function userAdminPanel() {
                 if (!res.ok) throw new Error(data.error || 'Не удалось изменить роль');
             } catch (e) {
                 u.role = previousRole;
+                this.error = e.message;
+            }
+        },
+
+        async deleteUser(u) {
+            if (!confirm(`Удалить пользователя "${u.display_name || u.email}"? Это действие необратимо.`)) return;
+
+            this.error = null;
+            try {
+                const res = await authFetch(`/api/admin/users/${u.id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Не удалось удалить пользователя');
+                this.users = this.users.filter((x) => x.id !== u.id);
+            } catch (e) {
                 this.error = e.message;
             }
         },

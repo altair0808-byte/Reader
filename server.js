@@ -11,6 +11,7 @@ app.use(express.json());
 app.use('/api/auth', require('./authRoutes'));
 app.use('/api/books', require('./books'));
 app.use('/api/users', require('./users'));
+app.use('/api/admin', require('./admin'));
 
 // Функция автоматического создания таблиц
 async function initDB() {
@@ -86,7 +87,7 @@ app.get('/auth-client.js', (req, res) => {
 });
 
 // HTML-страницы
-const pages = ['index', 'login', 'register', 'reader', 'create-book', 'book'];
+const pages = ['index', 'login', 'register', 'reader', 'create-book', 'book', 'admin-users'];
 pages.forEach((name) => {
     const routePath = name === 'index' ? '/' : `/${name}.html`;
     app.get(routePath, (req, res) => {
