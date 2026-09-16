@@ -72,6 +72,42 @@ async function callGemini({ system, prompt, tools, maxTokens = 4096 }, attempt =
         .join('\n');
 }
 
+// Gemini иногда возвращает "почти JSON" — например, реальный перевод строки
+// внутри текстового значения вместо экранированного "\n". Формально это
+// невалидный JSON (JSON.parse падает на "Bad control character"). Проходим
+// по строке посимвольно и экранируем управляющие символы, но только когда
+// мы внутри строкового литерала — саму структуру JSON не трогаем.
+function sanitizeJsonControlChars(text) {
+    let result = '';
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const code = text.charCodeAt(i);
+
+        if (inString && !escaped && code < 0x20) {
+            if (ch === '\n') result += '\\n';
+            else if (ch === '\r') result += '\\r';
+            else if (ch === '\t') result += '\\t';
+            else result += '\\u' + code.toString(16).padStart(4, '0');
+            continue;
+        }
+
+        result += ch;
+
+        if (escaped) {
+            escaped = false;
+        } else if (ch === '\\' && inString) {
+            escaped = true;
+        } else if (ch === '"') {
+            inString = !inString;
+        }
+    }
+
+    return result;
+}
+
 function extractJson(text) {
     const cleaned = text.replace(/```json|```/g, '').trim();
     const start = cleaned.indexOf('{');
@@ -79,7 +115,12 @@ function extractJson(text) {
     if (start === -1 || end === -1) {
         throw new Error('Модель не вернула JSON. Ответ: ' + text.slice(0, 300));
     }
-    return JSON.parse(cleaned.slice(start, end + 1));
+    const jsonSlice = sanitizeJsonControlChars(cleaned.slice(start, end + 1));
+    try {
+        return JSON.parse(jsonSlice);
+    } catch (err) {
+        throw new Error(`Не удалось разобрать JSON от модели (${err.message}). Начало ответа: ` + text.slice(0, 300));
+    }
 }
 
 /**
