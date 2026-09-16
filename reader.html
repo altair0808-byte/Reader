@@ -1,162 +1,241 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<title>Режим чтения</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-<script src="/auth-client.js"></script>
-<style>
-    .theme-light  { background: #ffffff; color: #1e293b; }
-    .theme-dark   { background: #111827; color: #e5e7eb; }
-    .theme-gray   { background: #6b7280; color: #f8fafc; }
-    .theme-sepia  { background: #f4ecd8; color: #5b4636; }
-    .theme-ocean  { background: #0f2942; color: #cde6f5; }
-</style>
+    <meta charset="UTF-8">
+    <title>Чтение книги — AI Книги</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="/auth-client.js"></script>
 </head>
-<body class="min-h-screen" x-data="reader()" x-init="init()" :class="'theme-' + settings.theme">
-
-<div class="max-w-3xl mx-auto px-6 py-10">
-
-    <div class="flex items-center justify-between mb-4 text-sm">
-        <a href="/" class="opacity-70 hover:opacity-100">← Все книги</a>
-        <button @click="logout()" class="opacity-70 hover:opacity-100">Выйти</button>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-4 mb-8 p-4 rounded-xl border"
-         :class="['dark', 'gray', 'ocean'].includes(settings.theme) ? 'border-slate-700' : 'border-slate-200'">
-
-        <div class="flex items-center gap-2">
-            <label class="text-sm opacity-70">Шрифт</label>
-            <select x-model="settings.font_family" @change="saveSettings()"
-                    class="text-sm rounded-lg border px-2 py-1 bg-transparent">
-                <option value="serif">Serif</option>
-                <option value="sans-serif">Sans-serif</option>
-                <option value="monospace">Monospace</option>
-            </select>
+<body class="bg-slate-50 min-h-screen text-slate-800" x-data="readerApp()" x-init="init()">
+    <div class="max-w-3xl mx-auto p-6">
+        <!-- Верхняя панель -->
+        <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
+            <a href="/" class="text-sm text-blue-600 hover:underline font-medium">← На главную</a>
+            <h1 class="font-bold text-slate-700 truncate max-w-md" x-text="book.title"></h1>
+            <div></div>
         </div>
 
-        <div class="flex items-center gap-2">
-            <label class="text-sm opacity-70">Размер</label>
-            <button @click="settings.font_size = Math.max(12, settings.font_size - 1); saveSettings()"
-                    class="w-7 h-7 rounded-lg border">−</button>
-            <span class="text-sm w-6 text-center" x-text="settings.font_size"></span>
-            <button @click="settings.font_size = Math.min(32, settings.font_size + 1); saveSettings()"
-                    class="w-7 h-7 rounded-lg border">+</button>
-        </div>
+        <!-- Ошибка / Загрузка -->
+        <div x-show="error" x-text="error" class="p-4 bg-red-100 text-red-700 rounded-lg mb-4 text-sm"></div>
+        <div x-show="loading" class="text-center py-12 text-slate-400">Загрузка книги...</div>
 
-        <div class="flex items-center gap-2 ml-auto">
-            <button @click="settings.theme = 'light'; saveSettings()"
-                    class="w-7 h-7 rounded-full bg-white border-2"
-                    :class="settings.theme === 'light' ? 'border-blue-500' : 'border-slate-300'"></button>
-            <button @click="settings.theme = 'sepia'; saveSettings()"
-                    class="w-7 h-7 rounded-full border-2"
-                    style="background:#f4ecd8"
-                    :class="settings.theme === 'sepia' ? 'border-blue-500' : 'border-slate-300'"></button>
-            <button @click="settings.theme = 'dark'; saveSettings()"
-                    class="w-7 h-7 rounded-full bg-slate-900 border-2"
-                    :class="settings.theme === 'dark' ? 'border-blue-500' : 'border-slate-600'"></button>
-            <button @click="settings.theme = 'gray'; saveSettings()"
-                    class="w-7 h-7 rounded-full border-2"
-                    style="background:#6b7280"
-                    :class="settings.theme === 'gray' ? 'border-blue-400' : 'border-slate-500'"></button>
-            <button @click="settings.theme = 'ocean'; saveSettings()"
-                    class="w-7 h-7 rounded-full border-2"
-                    style="background:#0f2942"
-                    :class="settings.theme === 'ocean' ? 'border-blue-400' : 'border-slate-500'"></button>
+        <!-- Контент читалки -->
+        <div x-show="!loading && chapter">
+            <!-- Управление главой (Редактировать / Добавить) — видно только автору или админу -->
+            <div class="flex items-center gap-2 mb-4" x-show="isOwnerOrAdmin">
+                <button @click="openEditModal()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded-lg font-medium transition flex items-center gap-1">
+                    ✏️ Редактировать главу
+                </button>
+                <button @click="openAddModal()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition flex items-center gap-1">
+                    ➕ Добавить главу
+                </button>
+            </div>
+
+            <!-- Шапка главы -->
+            <div class="mb-6">
+                <span class="text-xs font-semibold text-blue-600 uppercase tracking-wider" x-text="`Глава ${chapter.chapter_number}`"></span>
+                <h2 class="text-2xl font-bold text-slate-900 mt-1" x-text="chapter.title"></h2>
+            </div>
+
+            <!-- Текст главы -->
+            <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 prose max-w-none whitespace-pre-line font-serif text-lg leading-relaxed text-slate-700" x-text="chapter.content"></div>
+
+            <!-- Навигация по главам -->
+            <div class="flex justify-between items-center mt-8">
+                <button @click="changeChapter(currentChapterNum - 1)" :disabled="currentChapterNum <= 1" class="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-30">
+                    ← Предыдущая глава
+                </button>
+                <span class="text-sm text-slate-500 font-medium" x-text="`Глава ${currentChapterNum} из ${chapters.length}`"></span>
+                <button @click="changeChapter(currentChapterNum + 1)" :disabled="currentChapterNum >= chapters.length" class="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-30">
+                    Следующая глава →
+                </button>
+            </div>
         </div>
     </div>
 
-    <div x-show="!bookId" class="opacity-60">Книга не выбрана — вернись в каталог и выбери книгу.</div>
-    <div x-show="bookId && loading" class="opacity-60">Загрузка главы...</div>
-    <div x-show="bookId && !loading && !chapter.content" class="opacity-60">
-        Эта глава ещё не сгенерирована — страница обновится сама, как только она будет готова.
+    <!-- Модальное окно для Редактирования / Добавления главы -->
+    <div x-show="modalOpen" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div class="bg-white rounded-xl max-w-2xl w-full p-6 space-y-4 shadow-xl" @click.away="modalOpen = false">
+            <h3 class="text-lg font-bold text-slate-800" x-text="modalMode === 'edit' ? 'Редактировать главу' : 'Новая глава'"></h3>
+            
+            <div>
+                <label class="text-xs text-slate-500 font-medium">Название главы</label>
+                <input type="text" x-model="currentChapterTitle" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-blue-500">
+            </div>
+
+            <div>
+                <label class="text-xs text-slate-500 font-medium">Текст главы</label>
+                <textarea x-model="currentChapterContent" rows="10" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm font-serif focus:outline-none focus:border-blue-500"></textarea>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button @click="modalOpen = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg font-medium">Отмена</button>
+                <button @click="saveChapter()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg font-medium">Сохранить</button>
+            </div>
+        </div>
     </div>
 
-    <article
-        x-show="chapter.content"
-        :style="`font-family: ${settings.font_family}; font-size: ${settings.font_size}px; line-height: ${settings.line_height}`"
-        class="whitespace-pre-line"
-        x-text="chapter.content"
-    ></article>
+    <script>
+    function readerApp() {
+        return {
+            bookId: null,
+            currentChapterNum: 1,
+            book: {},
+            chapters: [],
+            chapter: null,
+            loading: true,
+            error: null,
+            currentUser: null,
+            isOwnerOrAdmin: false,
 
-    <div x-show="bookId" class="flex justify-between mt-10 text-sm">
-        <button @click="prevChapter()" class="underline opacity-70 hover:opacity-100">← Предыдущая глава</button>
-        <button @click="nextChapter()" class="underline opacity-70 hover:opacity-100">Следующая глава →</button>
-    </div>
-</div>
+            // Управление модалкой
+            modalOpen: false,
+            modalMode: 'edit',
+            currentChapterTitle: '',
+            currentChapterContent: '',
+            editingChapterId: null,
 
-<script>
-function reader() {
-    return {
-        bookId: new URLSearchParams(location.search).get('book_id'),
-        chapterNumber: parseInt(new URLSearchParams(location.search).get('chapter') || '1', 10),
-        chapter: { content: '' },
-        loading: true,
-        pollTimer: null,
-        settings: {
-            font_family: 'serif',
-            font_size: 18,
-            line_height: 1.6,
-            theme: 'light',
-        },
+            async init() {
+                const urlParams = new URLSearchParams(window.location.search);
+                this.bookId = urlParams.get('id');
+                const chNum = urlParams.get('chapter');
+                if (chNum) this.currentChapterNum = parseInt(chNum);
 
-        async init() {
-            if (!requireAuthOrRedirect()) return;
-            await this.loadMySettings();
-            if (this.bookId) await this.loadChapter();
-            else this.loading = false;
-        },
+                if (!this.bookId) {
+                    this.error = 'Книга не указана';
+                    this.loading = false;
+                    return;
+                }
 
-        async loadMySettings() {
-            const res = await authFetch('/api/users/me');
-            if (res.ok) {
-                const data = await res.json();
-                this.settings = { ...this.settings, ...data.user.reader_settings };
+                try {
+                    const token = getToken();
+                    
+                    // Получаем текущего пользователя для проверки прав
+                    const userRes = await fetch('/api/auth/me', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (userRes.ok) {
+                        const userData = await userRes.json();
+                        this.currentUser = userData.user;
+                    }
+
+                    // Загружаем инфо о книге
+                    const bookRes = await fetch(`/api/books/${this.bookId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!bookRes.ok) throw new Error('Не удалось загрузить книгу');
+                    const bookData = await bookRes.json();
+                    this.book = bookData.book;
+
+                    // Проверяем права (владелец книги или админ)
+                    if (this.currentUser) {
+                        const isAdmin = this.currentUser.role === 'admin' || this.currentUser.role === 'superadmin';
+                        const isOwner = this.book.user_id === this.currentUser.id;
+                        this.isOwnerOrAdmin = isAdmin || isOwner;
+                    }
+
+                    // Загружаем список глав
+                    const chaptersRes = await fetch(`/api/books/${this.bookId}/chapters`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!chaptersRes.ok) throw new Error('Не удалось загрузить главы');
+                    const chaptersData = await chaptersRes.json();
+                    this.chapters = chaptersData.chapters;
+
+                    if (this.chapters.length > 0) {
+                        const targetExists = this.chapters.some(c => c.chapter_number === this.currentChapterNum);
+                        if (!targetExists) {
+                            this.currentChapterNum = this.chapters[0].chapter_number;
+                        }
+                        await this.loadChapterContent(this.currentChapterNum);
+                    } else {
+                        this.error = 'В этой книге пока нет глав';
+                    }
+                } catch (e) {
+                    this.error = e.message;
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            async loadChapterContent(num) {
+                try {
+                    const token = getToken();
+                    const res = await fetch(`/api/books/${this.bookId}/chapters/${num}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!res.ok) throw new Error('Ошибка загрузки главы');
+                    const data = await res.json();
+                    this.chapter = data.chapter;
+                    this.currentChapterNum = num;
+
+                    const newUrl = `?id=${this.bookId}&chapter=${num}`;
+                    window.history.pushState({path: newUrl}, '', newUrl);
+                } catch (e) {
+                    this.error = e.message;
+                }
+            },
+
+            changeChapter(num) {
+                if (num >= 1 && num <= this.chapters.length) {
+                    this.loadChapterContent(num);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            },
+
+            openEditModal() {
+                if (!this.chapter) return;
+                this.modalMode = 'edit';
+                this.currentChapterTitle = this.chapter.title;
+                this.currentChapterContent = this.chapter.content;
+                this.editingChapterId = this.chapter.id;
+                this.modalOpen = true;
+            },
+
+            openAddModal() {
+                this.modalMode = 'add';
+                this.currentChapterTitle = `Глава ${(this.chapters.length || 0) + 1}`;
+                this.currentChapterContent = '';
+                this.editingChapterId = null;
+                this.modalOpen = true;
+            },
+
+            async saveChapter() {
+                const token = getToken();
+                try {
+                    let url, method;
+                    if (this.modalMode === 'edit') {
+                        url = `/api/books/${this.bookId}/chapters/${this.editingChapterId}`;
+                        method = 'PUT';
+                    } else {
+                        url = `/api/books/${this.bookId}/chapters`;
+                        method = 'POST';
+                    }
+
+                    const res = await fetch(url, {
+                        method: method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            title: this.currentChapterTitle,
+                            content: this.currentChapterContent
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error);
+
+                    this.modalOpen = false;
+                    location.reload(); // Обновляем страницу для подгрузки актуальных данных
+                } catch (e) {
+                    alert('Ошибка: ' + e.message);
+                }
             }
-        },
-
-        async loadChapter() {
-            this.loading = true;
-            clearInterval(this.pollTimer);
-
-            const res = await authFetch(`/api/books/${this.bookId}/chapters/${this.chapterNumber}`);
-            if (res.ok) {
-                const data = await res.json();
-                this.chapter = data.chapter;
-            } else {
-                this.chapter = { content: '' };
-            }
-            this.loading = false;
-
-            // Глава ещё не готова (генерируется по очереди на сервере) —
-            // сами проверяем снова через несколько секунд, без перезагрузки.
-            if (!this.chapter.content) {
-                this.pollTimer = setInterval(() => this.loadChapter(), 6000);
-            }
-        },
-
-        async saveSettings() {
-            await authFetch('/api/users/me/reader-settings', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.settings),
-            });
-        },
-
-        nextChapter() {
-            this.chapterNumber++;
-            this.loadChapter();
-        },
-        prevChapter() {
-            if (this.chapterNumber > 1) {
-                this.chapterNumber--;
-                this.loadChapter();
-            }
-        },
-    };
-}
-</script>
-
+        }
+    }
+    </script>
 </body>
 </html>
