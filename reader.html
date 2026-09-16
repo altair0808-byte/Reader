@@ -10,6 +10,8 @@
     .theme-light  { background: #ffffff; color: #1e293b; }
     .theme-dark   { background: #111827; color: #e5e7eb; }
     .theme-sepia  { background: #f4ecd8; color: #5b4636; }
+    .theme-ocean  { background: #0f2942; color: #cde6f5; }
+    .theme-forest { background: #1c2b20; color: #dcecd8; }
 </style>
 </head>
 <body class="min-h-screen" x-data="reader()" x-init="init()" :class="'theme-' + settings.theme">
@@ -22,7 +24,7 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-4 mb-8 p-4 rounded-xl border"
-         :class="settings.theme === 'dark' ? 'border-slate-700' : 'border-slate-200'">
+         :class="['dark', 'ocean', 'forest'].includes(settings.theme) ? 'border-slate-700' : 'border-slate-200'">
 
         <div class="flex items-center gap-2">
             <label class="text-sm opacity-70">Шрифт</label>
@@ -54,6 +56,14 @@
             <button @click="settings.theme = 'dark'; saveSettings()"
                     class="w-7 h-7 rounded-full bg-slate-900 border-2"
                     :class="settings.theme === 'dark' ? 'border-blue-500' : 'border-slate-600'"></button>
+            <button @click="settings.theme = 'ocean'; saveSettings()"
+                    class="w-7 h-7 rounded-full border-2"
+                    style="background:#0f2942"
+                    :class="settings.theme === 'ocean' ? 'border-blue-400' : 'border-slate-500'"></button>
+            <button @click="settings.theme = 'forest'; saveSettings()"
+                    class="w-7 h-7 rounded-full border-2"
+                    style="background:#1c2b20"
+                    :class="settings.theme === 'forest' ? 'border-blue-400' : 'border-slate-500'"></button>
         </div>
     </div>
 

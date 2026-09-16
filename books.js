@@ -17,7 +17,9 @@ router.post('/generate', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'Укажите название и описание (промпт) для книги' });
         }
 
-        const chaptersCount = Number.isInteger(chapters) && chapters > 0 ? chapters : 5;
+        const chaptersCount = Number.isInteger(chapters) && chapters > 0
+            ? Math.min(chapters, 100)
+            : 5;
 
         const inserted = await pool.query(
             `INSERT INTO books
@@ -124,10 +126,10 @@ router.post('/upload', authenticate, async (req, res) => {
 
         const inserted = await pool.query(
             `INSERT INTO books
-                (user_id, title, genre, short_description, status, total_chapters_plan)
-             VALUES ($1, $2, $3, $4, 'completed', 1)
+                (user_id, title, genre, short_description, description, status, total_chapters_plan)
+             VALUES ($1, $2, $3, $4, $5, 'completed', 1)
              RETURNING *`,
-            [userId, title, genre || 'Общий', content.slice(0, 300)]
+            [userId, title, genre || 'Общий', content.slice(0, 300), content.slice(0, 500)]
         );
 
         const book = inserted.rows[0];

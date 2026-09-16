@@ -55,6 +55,7 @@ async function initDB() {
       ALTER TABLE books ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'draft';
       ALTER TABLE books ADD COLUMN IF NOT EXISTS enrichment_sources JSONB DEFAULT '[]';
       ALTER TABLE books ADD COLUMN IF NOT EXISTS generation_error TEXT;
+      ALTER TABLE books ADD COLUMN IF NOT EXISTS description TEXT;
     `);
 
     // Главы книги — генерируются и сохраняются по одной через bookGenerator.js
@@ -85,7 +86,7 @@ app.get('/auth-client.js', (req, res) => {
 });
 
 // HTML-страницы
-const pages = ['index', 'login', 'register', 'reader', 'create-book'];
+const pages = ['index', 'login', 'register', 'reader', 'create-book', 'book'];
 pages.forEach((name) => {
     const routePath = name === 'index' ? '/' : `/${name}.html`;
     app.get(routePath, (req, res) => {

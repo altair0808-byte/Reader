@@ -43,7 +43,7 @@
             </div>
             <div>
                 <label class="text-sm text-slate-600">Количество глав</label>
-                <input type="number" x-model.number="chaptersCount" min="1" max="20" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <input type="number" x-model.number="chaptersCount" min="1" max="100" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
             </div>
             <button type="submit" :disabled="loading" class="w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-50">
                 <span x-text="loading ? 'Запускаем генерацию...' : 'Сгенерировать книгу'"></span>

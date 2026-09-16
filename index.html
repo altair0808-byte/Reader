@@ -35,7 +35,7 @@
 
     <div class="grid sm:grid-cols-2 gap-4">
         <template x-for="book in books" :key="book.id">
-            <a :href="`/reader.html?book_id=${book.id}&chapter=1`"
+            <a :href="`/book.html?book_id=${book.id}`"
                class="block bg-white rounded-xl border border-slate-200 p-4 hover:shadow-sm transition">
                 <p class="font-medium text-slate-800" x-text="book.title"></p>
                 <p class="text-sm text-slate-500 mt-1 line-clamp-2" x-text="book.short_description"></p>
