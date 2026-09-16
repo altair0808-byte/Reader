@@ -52,13 +52,14 @@ router.get('/', authenticate, async (req, res) => {
 
         const books = isAdmin
             ? await pool.query(
-                `SELECT books.id, books.title, books.genre, books.status, books.short_description, books.created_at,
+                `SELECT books.id, books.title, books.genre, books.status, books.short_description,
+                        books.cover_image_url, books.created_at,
                         users.display_name AS owner_name, users.email AS owner_email
                  FROM books JOIN users ON users.id = books.user_id
                  ORDER BY books.created_at DESC`
               )
             : await pool.query(
-                `SELECT id, title, genre, status, short_description, created_at
+                `SELECT id, title, genre, status, short_description, cover_image_url, created_at
                  FROM books WHERE user_id = $1 ORDER BY created_at DESC`,
                 [req.user.id]
               );

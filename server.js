@@ -57,6 +57,7 @@ async function initDB() {
       ALTER TABLE books ADD COLUMN IF NOT EXISTS enrichment_sources JSONB DEFAULT '[]';
       ALTER TABLE books ADD COLUMN IF NOT EXISTS generation_error TEXT;
       ALTER TABLE books ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE books ADD COLUMN IF NOT EXISTS cover_image_url TEXT;
     `);
 
     // Главы книги — генерируются и сохраняются по одной через bookGenerator.js

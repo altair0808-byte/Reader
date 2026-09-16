@@ -79,6 +79,11 @@
                 <button x-show="isAdmin" @click="deleteBook(book)"
                         class="absolute top-3 right-3 text-xs text-red-500 hover:underline">Удалить</button>
                 <a :href="`/book.html?book_id=${book.id}`" class="block pr-14">
+                    <img x-show="book.cover_image_url" :src="book.cover_image_url"
+                         class="w-full h-40 object-cover rounded-lg mb-3" alt="">
+                    <div x-show="!book.cover_image_url"
+                         class="w-full h-40 rounded-lg mb-3 flex items-center justify-center text-3xl"
+                         :class="isDarkTheme ? 'bg-white/5' : 'bg-slate-100'">📖</div>
                     <p class="font-medium" x-text="book.title"></p>
                     <p class="text-sm opacity-70 mt-1 line-clamp-2" x-text="book.short_description"></p>
                     <p x-show="isAdmin && book.owner_name" class="text-xs opacity-50 mt-1" x-text="'Автор: ' + book.owner_name"></p>

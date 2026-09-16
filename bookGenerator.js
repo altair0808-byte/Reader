@@ -6,6 +6,11 @@ const db = require('./db');
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+// Отдельная модель для обложек — это не то же самое, что текстовая модель
+// выше, и она может быть недоступна/платная на некоторых ключах. Если её
+// не удаётся вызвать, книга всё равно генерируется, просто без обложки.
+const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
+
 // Бесплатный тир Gemini ограничен по запросам в минуту (обычно 10-15 RPM
 // для Flash-моделей). Ставим паузу между запросами, чтобы не словить 429
 // раньше времени — при генерации книги запросов идёт много подряд.
@@ -70,6 +75,56 @@ async function callGemini({ system, prompt, tools, maxTokens = 4096 }, attempt =
     return (candidate.content?.parts || [])
         .map((p) => p.text || '')
         .join('\n');
+}
+
+/**
+ * Генерация обложки книги через отдельную модель для картинок (не ту же,
+ * что для текста). Возвращает data: URL (base64) для прямого использования
+ * в <img src="...">, либо null, если генерация не удалась — обложка
+ * необязательна, книга без неё всё равно должна создаться нормально.
+ */
+async function generateCoverImage(prompt, attempt = 1) {
+    if (!GEMINI_API_KEY) return null;
+
+    try {
+        const res = await fetch(geminiUrl(IMAGE_MODEL), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: { responseModalities: ['IMAGE'] },
+            }),
+        });
+
+        if ((res.status === 429 || res.status === 503) && attempt <= 3) {
+            const backoff = MIN_DELAY_MS * attempt * 2;
+            console.warn(`Gemini Image ${res.status}, попытка ${attempt}, жду ${backoff}мс`);
+            await sleep(backoff);
+            return generateCoverImage(prompt, attempt + 1);
+        }
+
+        if (!res.ok) {
+            const errBody = await res.text();
+            console.warn(`Обложка не сгенерирована (HTTP ${res.status}): ${errBody.slice(0, 300)}`);
+            return null;
+        }
+
+        const data = await res.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const imagePart = parts.find((p) => p.inlineData || p.inline_data);
+        const inline = imagePart?.inlineData || imagePart?.inline_data;
+
+        if (!inline?.data) {
+            console.warn('Обложка: модель не вернула изображение');
+            return null;
+        }
+
+        const mimeType = inline.mimeType || inline.mime_type || 'image/png';
+        return `data:${mimeType};base64,${inline.data}`;
+    } catch (err) {
+        console.warn('Ошибка генерации обложки, продолжаю без неё:', err.message);
+        return null;
+    }
 }
 
 // Gemini иногда возвращает "почти JSON" — например, реальный перевод строки
@@ -249,6 +304,17 @@ async function generateBookAsync(bookId) {
             [plan.title, plan.description || null, plan.short_description || book.short_description, bookId]
         );
         book.title = plan.title;
+
+        // Обложка — необязательный шаг. Если не получится (модель недоступна,
+        // лимиты, платный доступ и т.д.) — просто продолжаем без неё, книга
+        // не должна из-за этого падать в статус "failed".
+        const coverPrompt = `Обложка книги в жанре "${book.genre || 'художественная литература'}". ` +
+            `Название: "${plan.title}". Описание: ${plan.description || book.short_description}. ` +
+            `Стиль: художественная иллюстрация, без текста и без надписей на изображении.`;
+        const coverImageUrl = await generateCoverImage(coverPrompt);
+        if (coverImageUrl) {
+            await db.query('UPDATE books SET cover_image_url = $1 WHERE id = $2', [coverImageUrl, bookId]);
+        }
 
         const previousSummaries = [];
         for (const chapterPlan of plan.chapters.sort((a, b) => a.number - b.number)) {

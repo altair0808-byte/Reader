@@ -20,6 +20,8 @@
 
     <template x-if="!loading && book">
         <div>
+            <img x-show="book.cover_image_url" :src="book.cover_image_url"
+                 class="w-full max-h-80 object-cover rounded-xl mb-6" alt="">
             <h1 class="text-2xl font-bold text-slate-800 mb-2" x-text="book.title"></h1>
             <div class="flex items-center gap-2 mb-4 text-sm text-slate-500">
                 <span x-text="book.genre"></span>
