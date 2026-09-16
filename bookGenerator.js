@@ -3,7 +3,7 @@ const db = require('./db');
 // Модель по умолчанию — из бесплатного тира Gemini API (без карты).
 // Если Google переименует линейку, поменяй в переменной окружения GEMINI_MODEL,
 // код менять не нужно.
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Бесплатный тир Gemini ограничен по запросам в минуту (обычно 10-15 RPM
