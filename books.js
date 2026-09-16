@@ -58,7 +58,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Роут для проверки статуса одной книги (для поллинга во время генерации)
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id/chapters/:number', authenticate, async (req, res) => {
     try {
         const { rows } = await pool.query(
             'SELECT * FROM books WHERE id = $1 AND user_id = $2',
