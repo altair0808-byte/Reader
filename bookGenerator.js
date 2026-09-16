@@ -129,10 +129,16 @@ async function generateBookPlan(shortDescription, chaptersCount, enrichment) {
   ]
 }`;
 
+    // Лимит ответа зависит от числа глав — план на 100 глав в JSON занимает
+    // намного больше места, чем на 5. Без этого при большом chaptersCount
+    // ответ Gemini обрывается на середине и JSON.parse падает с ошибкой.
+    // gemini-3.6-flash допускает максимум 65536 токенов на выход — оставляем запас.
+    const planMaxTokens = Math.min(60000, Math.max(4096, 300 * chaptersCount));
+
     const text = await callGemini({
         system,
         prompt: shortDescription + enrichmentBlock,
-        maxTokens: 4096,
+        maxTokens: planMaxTokens,
     });
 
     const plan = extractJson(text);
