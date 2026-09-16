@@ -6,24 +6,31 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="/auth-client.js"></script>
+    <style>
+        .theme-light  { background: #f8fafc; color: #1e293b; }
+        .theme-dark   { background: #111827; color: #e5e7eb; }
+        .theme-gray   { background: #4b5563; color: #f8fafc; }
+        .theme-sepia  { background: #f4ecd8; color: #5b4636; }
+        .theme-ocean  { background: #0f2942; color: #cde6f5; }
+    </style>
 </head>
-<body class="bg-slate-50 min-h-screen" x-data="bookPage()" x-init="init()">
+<body class="min-h-screen" x-data="bookPage()" x-init="init()" :class="'theme-' + settings.theme">
 
 <div class="max-w-3xl mx-auto px-6 py-10">
     <div class="flex items-center justify-between mb-6 text-sm">
-        <a href="/" class="text-slate-500 hover:underline">← Все книги</a>
+        <a href="/" class="opacity-70 hover:opacity-100">← Все книги</a>
         <button x-show="isAdmin" @click="deleteBook()"
-                class="text-red-600 hover:underline">Удалить книгу</button>
+                class="text-red-500 hover:underline">Удалить книгу</button>
     </div>
 
-    <div x-show="loading" class="text-slate-400">Загрузка...</div>
+    <div x-show="loading" class="opacity-60">Загрузка...</div>
 
     <template x-if="!loading && book">
         <div>
             <img x-show="book.cover_image_url" :src="book.cover_image_url"
                  class="w-full max-h-80 object-cover rounded-xl mb-6" alt="">
-            <h1 class="text-2xl font-bold text-slate-800 mb-2" x-text="book.title"></h1>
-            <div class="flex items-center gap-2 mb-4 text-sm text-slate-500">
+            <h1 class="text-2xl font-bold mb-2" x-text="book.title"></h1>
+            <div class="flex items-center gap-2 mb-4 text-sm opacity-70">
                 <span x-text="book.genre"></span>
                 <span>·</span>
                 <span x-text="{completed: 'Готова', generating: 'Генерируется', failed: 'Ошибка генерации', draft: 'Черновик'}[book.status]"></span>
@@ -32,7 +39,7 @@
                 </template>
             </div>
 
-            <p class="text-slate-600 leading-relaxed mb-8" x-text="book.description || book.short_description"></p>
+            <p class="leading-relaxed mb-8 opacity-90" x-text="book.description || book.short_description"></p>
 
             <div x-show="book.status === 'failed'" class="mb-6 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
                 Генерация не удалась<span x-show="book.generation_error">: <span x-text="book.generation_error"></span></span>
@@ -42,19 +49,19 @@
                 Книга генерируется — уже готовые главы можно читать сейчас, остальные появятся здесь сами по мере готовности.
             </div>
 
-            <h2 class="text-lg font-semibold text-slate-800 mb-3">Оглавление</h2>
+            <h2 class="text-lg font-semibold mb-3">Оглавление</h2>
 
-            <div x-show="chapters.length === 0" class="text-slate-400 text-sm">Глав пока нет.</div>
+            <div x-show="chapters.length === 0" class="opacity-60 text-sm">Глав пока нет.</div>
 
             <ol class="space-y-2">
                 <template x-for="ch in chapters" :key="ch.id">
                     <li>
                         <a :href="`/reader.html?book_id=${book.id}&chapter=${ch.chapter_number}`"
-                           class="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-slate-200 hover:shadow-sm transition"
-                           :class="ch.status !== 'completed' ? 'opacity-60 pointer-events-none' : ''">
+                           class="flex items-center justify-between px-4 py-3 rounded-lg border hover:shadow-sm transition"
+                           :class="[isDarkTheme ? 'bg-black/20 border-white/10' : 'bg-white border-slate-200', ch.status !== 'completed' ? 'opacity-60 pointer-events-none' : '']">
                             <span>
-                                <span class="text-slate-400 mr-2" x-text="ch.chapter_number + '.'"></span>
-                                <span class="text-slate-800" x-text="ch.title"></span>
+                                <span class="opacity-50 mr-2" x-text="ch.chapter_number + '.'"></span>
+                                <span x-text="ch.title"></span>
                             </span>
                             <span class="text-xs px-2 py-0.5 rounded-full"
                                   :class="{
@@ -80,6 +87,11 @@ function bookPage() {
         loading: true,
         isAdmin: false,
         pollTimer: null,
+        settings: { theme: 'light' },
+
+        get isDarkTheme() {
+            return ['dark', 'gray', 'ocean'].includes(this.settings.theme);
+        },
 
         async init() {
             if (!requireAuthOrRedirect()) return;
@@ -89,6 +101,7 @@ function bookPage() {
             if (meRes.ok) {
                 const me = (await meRes.json()).user;
                 this.isAdmin = me.role === 'admin' || me.role === 'superadmin';
+                if (me.reader_settings?.theme) this.settings.theme = me.reader_settings.theme;
             }
 
             await this.load();
