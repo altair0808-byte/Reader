@@ -35,19 +35,23 @@
 
     <div class="grid sm:grid-cols-2 gap-4">
         <template x-for="book in books" :key="book.id">
-            <a :href="`/book.html?book_id=${book.id}`"
-               class="block bg-white rounded-xl border border-slate-200 p-4 hover:shadow-sm transition">
-                <p class="font-medium text-slate-800" x-text="book.title"></p>
-                <p class="text-sm text-slate-500 mt-1 line-clamp-2" x-text="book.short_description"></p>
-                <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-full"
-                      :class="{
-                          'bg-green-100 text-green-700': book.status === 'completed',
-                          'bg-amber-100 text-amber-700': book.status === 'generating',
-                          'bg-red-100 text-red-700': book.status === 'failed'
-                      }"
-                      x-text="{completed: 'Готова', generating: 'Генерируется', failed: 'Ошибка', draft: 'Черновик'}[book.status]"
-                ></span>
-            </a>
+            <div class="relative block bg-white rounded-xl border border-slate-200 p-4 hover:shadow-sm transition">
+                <button x-show="isAdmin" @click="deleteBook(book)"
+                        class="absolute top-3 right-3 text-xs text-red-500 hover:underline">Удалить</button>
+                <a :href="`/book.html?book_id=${book.id}`" class="block pr-14">
+                    <p class="font-medium text-slate-800" x-text="book.title"></p>
+                    <p class="text-sm text-slate-500 mt-1 line-clamp-2" x-text="book.short_description"></p>
+                    <p x-show="isAdmin && book.owner_name" class="text-xs text-slate-400 mt-1" x-text="'Автор: ' + book.owner_name"></p>
+                    <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-full"
+                          :class="{
+                              'bg-green-100 text-green-700': book.status === 'completed',
+                              'bg-amber-100 text-amber-700': book.status === 'generating',
+                              'bg-red-100 text-red-700': book.status === 'failed'
+                          }"
+                          x-text="{completed: 'Готова', generating: 'Генерируется', failed: 'Ошибка', draft: 'Черновик'}[book.status]"
+                    ></span>
+                </a>
+            </div>
         </template>
     </div>
 </main>
@@ -59,17 +63,37 @@ function homePage() {
         books: [],
         loading: true,
 
+        get isAdmin() {
+            return this.user && (this.user.role === 'admin' || this.user.role === 'superadmin');
+        },
+
         async init() {
             if (getToken()) {
                 const meRes = await authFetch('/api/users/me');
                 if (meRes.ok) this.user = (await meRes.json()).user;
             }
 
+            await this.loadBooks();
+            this.loading = false;
+        },
+
+        async loadBooks() {
             const booksRes = await fetch('/api/books', {
                 headers: getToken() ? { Authorization: 'Bearer ' + getToken() } : {},
             });
             if (booksRes.ok) this.books = (await booksRes.json()).books;
-            this.loading = false;
+        },
+
+        async deleteBook(book) {
+            if (!confirm(`Удалить книгу "${book.title}"? Это действие необратимо.`)) return;
+
+            const res = await authFetch(`/api/books/${book.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                this.books = this.books.filter((b) => b.id !== book.id);
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.error || 'Не удалось удалить книгу');
+            }
         },
     };
 }

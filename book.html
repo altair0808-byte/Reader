@@ -12,6 +12,8 @@
 <div class="max-w-3xl mx-auto px-6 py-10">
     <div class="flex items-center justify-between mb-6 text-sm">
         <a href="/" class="text-slate-500 hover:underline">← Все книги</a>
+        <button x-show="isAdmin" @click="deleteBook()"
+                class="text-red-600 hover:underline">Удалить книгу</button>
     </div>
 
     <div x-show="loading" class="text-slate-400">Загрузка...</div>
@@ -23,6 +25,9 @@
                 <span x-text="book.genre"></span>
                 <span>·</span>
                 <span x-text="{completed: 'Готова', generating: 'Генерируется', failed: 'Ошибка генерации', draft: 'Черновик'}[book.status]"></span>
+                <template x-if="isAdmin && book.owner_name">
+                    <span>· <span x-text="book.owner_name"></span></span>
+                </template>
             </div>
 
             <p class="text-slate-600 leading-relaxed mb-8" x-text="book.description || book.short_description"></p>
@@ -32,7 +37,7 @@
             </div>
 
             <div x-show="book.status === 'generating'" class="mb-6 p-3 bg-amber-100 text-amber-700 rounded-lg text-sm">
-                Книга ещё генерируется — главы будут появляться в списке по мере готовности. Обнови страницу через минуту.
+                Книга генерируется — уже готовые главы можно читать сейчас, остальные появятся здесь сами по мере готовности.
             </div>
 
             <h2 class="text-lg font-semibold text-slate-800 mb-3">Оглавление</h2>
@@ -71,11 +76,34 @@ function bookPage() {
         book: null,
         chapters: [],
         loading: true,
+        isAdmin: false,
+        pollTimer: null,
 
         async init() {
             if (!requireAuthOrRedirect()) return;
             if (!this.bookId) { this.loading = false; return; }
 
+            const meRes = await authFetch('/api/users/me');
+            if (meRes.ok) {
+                const me = (await meRes.json()).user;
+                this.isAdmin = me.role === 'admin' || me.role === 'superadmin';
+            }
+
+            await this.load();
+            this.loading = false;
+
+            // Пока книга генерируется — сами подтягиваем новые главы каждые
+            // несколько секунд, без ручного обновления страницы пользователем.
+            this.pollTimer = setInterval(() => {
+                if (this.book && this.book.status === 'generating') {
+                    this.load();
+                } else {
+                    clearInterval(this.pollTimer);
+                }
+            }, 8000);
+        },
+
+        async load() {
             const [bookRes, chaptersRes] = await Promise.all([
                 authFetch(`/api/books/${this.bookId}`),
                 authFetch(`/api/books/${this.bookId}/chapters`),
@@ -83,8 +111,18 @@ function bookPage() {
 
             if (bookRes.ok) this.book = (await bookRes.json()).book;
             if (chaptersRes.ok) this.chapters = (await chaptersRes.json()).chapters;
+        },
 
-            this.loading = false;
+        async deleteBook() {
+            if (!confirm(`Удалить книгу "${this.book.title}"? Это действие необратимо.`)) return;
+
+            const res = await authFetch(`/api/books/${this.bookId}`, { method: 'DELETE' });
+            if (res.ok) {
+                location.href = '/';
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.error || 'Не удалось удалить книгу');
+            }
         },
     };
 }

@@ -69,7 +69,9 @@
 
     <div x-show="!bookId" class="opacity-60">Книга не выбрана — вернись в каталог и выбери книгу.</div>
     <div x-show="bookId && loading" class="opacity-60">Загрузка главы...</div>
-    <div x-show="bookId && !loading && !chapter.content" class="opacity-60">Эта глава ещё не сгенерирована.</div>
+    <div x-show="bookId && !loading && !chapter.content" class="opacity-60">
+        Эта глава ещё не сгенерирована — страница обновится сама, как только она будет готова.
+    </div>
 
     <article
         x-show="chapter.content"
@@ -91,6 +93,7 @@ function reader() {
         chapterNumber: parseInt(new URLSearchParams(location.search).get('chapter') || '1', 10),
         chapter: { content: '' },
         loading: true,
+        pollTimer: null,
         settings: {
             font_family: 'serif',
             font_size: 18,
@@ -115,6 +118,8 @@ function reader() {
 
         async loadChapter() {
             this.loading = true;
+            clearInterval(this.pollTimer);
+
             const res = await authFetch(`/api/books/${this.bookId}/chapters/${this.chapterNumber}`);
             if (res.ok) {
                 const data = await res.json();
@@ -123,6 +128,12 @@ function reader() {
                 this.chapter = { content: '' };
             }
             this.loading = false;
+
+            // Глава ещё не готова (генерируется по очереди на сервере) —
+            // сами проверяем снова через несколько секунд, без перезагрузки.
+            if (!this.chapter.content) {
+                this.pollTimer = setInterval(() => this.loadChapter(), 6000);
+            }
         },
 
         async saveSettings() {
