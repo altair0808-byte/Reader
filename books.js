@@ -4,10 +4,7 @@ const pool = require('./db');
 const { authenticate, requireAdminOrAbove } = require('./auth');
 const { generateBookAsync } = require('./bookGenerator');
 
-// Роут для создания книги — запускает НАСТОЯЩУЮ генерацию через Gemini
-// (bookGenerator.js), а не заглушку. Отвечаем сразу, генерация идёт в фоне,
-// т.к. может занимать несколько минут (пауза между запросами к Gemini +
-// генерация каждой главы по отдельности).
+// Роут для создания книги — запускает генерацию через Gemini
 router.post('/generate', authenticate, async (req, res) => {
     try {
         const { title, prompt, genre, chapters, use_web_enrichment } = req.body;
@@ -31,7 +28,6 @@ router.post('/generate', authenticate, async (req, res) => {
 
         const book = inserted.rows[0];
 
-        // Не ждём завершения генерации — отвечаем клиенту сразу.
         generateBookAsync(book.id).catch((err) => {
             console.error(`❌ Генерация книги #${book.id} упала:`, err);
         });
@@ -44,8 +40,7 @@ router.post('/generate', authenticate, async (req, res) => {
     }
 });
 
-// Роут для получения списка книг. Обычным пользователям — только свои,
-// admin/superadmin — все книги всех пользователей (нужно для модерации/удаления).
+// Получение списка книг
 router.get('/', authenticate, async (req, res) => {
     try {
         const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
@@ -71,7 +66,7 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
-// Роут для проверки статуса одной книги (для поллинга во время генерации)
+// Проверка статуса одной книги
 router.get('/:id', authenticate, async (req, res) => {
     try {
         const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
@@ -87,8 +82,7 @@ router.get('/:id', authenticate, async (req, res) => {
     }
 });
 
-// Роут для удаления книги — доступен admin и superadmin, для ЛЮБОЙ книги
-// (не только своей). Главы удаляются автоматически через ON DELETE CASCADE.
+// Удаление книги
 router.delete('/:id', authenticate, requireAdminOrAbove, async (req, res) => {
     try {
         const { rows } = await pool.query('DELETE FROM books WHERE id = $1 RETURNING id', [req.params.id]);
@@ -100,7 +94,7 @@ router.delete('/:id', authenticate, requireAdminOrAbove, async (req, res) => {
     }
 });
 
-// Роут для получения глав книги
+// Получение списка глав книги
 router.get('/:id/chapters', authenticate, async (req, res) => {
     try {
         const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
@@ -120,9 +114,7 @@ router.get('/:id/chapters', authenticate, async (req, res) => {
     }
 });
 
-// Роут для получения ОДНОЙ главы по номеру — именно его использует reader.html
-// (GET /api/books/:id/chapters/:chapterNumber), в отличие от роута выше,
-// который отдаёт сразу все главы списком.
+// Получение ОДНОЙ главы по номеру
 router.get('/:id/chapters/:number', authenticate, async (req, res) => {
     try {
         const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
@@ -144,9 +136,7 @@ router.get('/:id/chapters/:number', authenticate, async (req, res) => {
     }
 });
 
-// Роут для загрузки ГОТОВОЙ книги (без ИИ) — например, книги, написанной
-// самим пользователем или взятой из другого источника. Весь текст
-// сохраняется как одна законченная глава.
+// Загрузка готовой книги (базовая)
 router.post('/upload', authenticate, async (req, res) => {
     try {
         const { title, genre, content } = req.body;
@@ -178,6 +168,91 @@ router.post('/upload', authenticate, async (req, res) => {
     } catch (err) {
         console.error("❌ ОШИБКА загрузки книги:", err);
         res.status(500).json({ error: 'Ошибка сервера при загрузке книги' });
+    }
+});
+
+// Добавить новую главу к существующей книге
+router.post('/:id/chapters', authenticate, async (req, res) => {
+    try {
+        const bookId = req.params.id;
+        const { chapter_number, title, content } = req.body;
+        const userId = req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+
+        const bookQuery = isAdmin
+            ? await pool.query('SELECT id FROM books WHERE id = $1', [bookId])
+            : await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [bookId, userId]);
+
+        if (!bookQuery.rows[0]) {
+            return res.status(404).json({ error: 'Книга не найдена или нет прав' });
+        }
+
+        if (!title || !content) {
+            return res.status(400).json({ error: 'Укажите название и текст главы' });
+        }
+
+        let chapterNum = chapter_number;
+        if (!chapterNum) {
+            const maxNumRes = await pool.query(
+                'SELECT MAX(chapter_number) as max_num FROM chapters WHERE book_id = $1',
+                [bookId]
+            );
+            chapterNum = (maxNumRes.rows[0].max_num || 0) + 1;
+        }
+
+        const wordCount = content.trim().split(/\s+/).length;
+
+        const inserted = await pool.query(
+            `INSERT INTO chapters (book_id, chapter_number, title, content, word_count, status)
+             VALUES ($1, $2, $3, $4, $5, 'completed')
+             RETURNING *`,
+            [bookId, chapterNum, title, content, wordCount]
+        );
+
+        res.status(201).json({ message: 'Глава успешно добавлена', chapter: inserted.rows[0] });
+    } catch (err) {
+        console.error("❌ ОШИБКА добавления главы:", err);
+        res.status(500).json({ error: 'Ошибка сервера при добавлении главы' });
+    }
+});
+
+// Редактировать главу
+router.put('/:id/chapters/:chapterId', authenticate, async (req, res) => {
+    try {
+        const { id, chapterId } = req.params;
+        const { title, content, chapter_number } = req.body;
+        const userId = req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+
+        const bookQuery = isAdmin
+            ? await pool.query('SELECT id FROM books WHERE id = $1', [id])
+            : await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [id, userId]);
+
+        if (!bookQuery.rows[0]) {
+            return res.status(404).json({ error: 'Книга не найдена или нет прав' });
+        }
+
+        const wordCount = content ? content.trim().split(/\s+/).length : 0;
+
+        const updated = await pool.query(
+            `UPDATE chapters 
+             SET title = COALESCE($1, title), 
+                 content = COALESCE($2, content), 
+                 chapter_number = COALESCE($3, chapter_number),
+                 word_count = COALESCE($4, word_count)
+             WHERE id = $5 AND book_id = $6
+             RETURNING *`,
+            [title, content, chapter_number, wordCount, chapterId, id]
+        );
+
+        if (!updated.rows[0]) {
+            return res.status(404).json({ error: 'Глава не найдена' });
+        }
+
+        res.json({ message: 'Глава обновлена', chapter: updated.rows[0] });
+    } catch (err) {
+        console.error("❌ ОШИБКА обновления главы:", err);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
