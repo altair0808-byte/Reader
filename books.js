@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('./db');
-const { authenticate } = require('./auth');
+const { authenticate, requireAdminOrAbove } = require('./auth');
 const { generateBookAsync } = require('./bookGenerator');
 
 // Роут для создания книги — запускает НАСТОЯЩУЮ генерацию через Gemini
@@ -44,14 +44,25 @@ router.post('/generate', authenticate, async (req, res) => {
     }
 });
 
-// Роут для получения списка книг текущего пользователя
+// Роут для получения списка книг. Обычным пользователям — только свои,
+// admin/superadmin — все книги всех пользователей (нужно для модерации/удаления).
 router.get('/', authenticate, async (req, res) => {
     try {
-        const books = await pool.query(
-            `SELECT id, title, genre, status, short_description, created_at
-             FROM books WHERE user_id = $1 ORDER BY created_at DESC`,
-            [req.user.id]
-        );
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+
+        const books = isAdmin
+            ? await pool.query(
+                `SELECT books.id, books.title, books.genre, books.status, books.short_description, books.created_at,
+                        users.display_name AS owner_name, users.email AS owner_email
+                 FROM books JOIN users ON users.id = books.user_id
+                 ORDER BY books.created_at DESC`
+              )
+            : await pool.query(
+                `SELECT id, title, genre, status, short_description, created_at
+                 FROM books WHERE user_id = $1 ORDER BY created_at DESC`,
+                [req.user.id]
+              );
+
         res.json({ books: books.rows });
     } catch (err) {
         console.error(err);
@@ -62,10 +73,11 @@ router.get('/', authenticate, async (req, res) => {
 // Роут для проверки статуса одной книги (для поллинга во время генерации)
 router.get('/:id', authenticate, async (req, res) => {
     try {
-        const { rows } = await pool.query(
-            'SELECT * FROM books WHERE id = $1 AND user_id = $2',
-            [req.params.id, req.user.id]
-        );
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        const { rows } = isAdmin
+            ? await pool.query('SELECT * FROM books WHERE id = $1', [req.params.id])
+            : await pool.query('SELECT * FROM books WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+
         if (!rows[0]) return res.status(404).json({ error: 'Книга не найдена' });
         res.json({ book: rows[0] });
     } catch (err) {
@@ -74,10 +86,26 @@ router.get('/:id', authenticate, async (req, res) => {
     }
 });
 
+// Роут для удаления книги — доступен admin и superadmin, для ЛЮБОЙ книги
+// (не только своей). Главы удаляются автоматически через ON DELETE CASCADE.
+router.delete('/:id', authenticate, requireAdminOrAbove, async (req, res) => {
+    try {
+        const { rows } = await pool.query('DELETE FROM books WHERE id = $1 RETURNING id', [req.params.id]);
+        if (!rows[0]) return res.status(404).json({ error: 'Книга не найдена' });
+        res.json({ message: 'Книга удалена' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка удаления книги' });
+    }
+});
+
 // Роут для получения глав книги
 router.get('/:id/chapters', authenticate, async (req, res) => {
     try {
-        const book = await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        const book = isAdmin
+            ? await pool.query('SELECT id FROM books WHERE id = $1', [req.params.id])
+            : await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
         if (!book.rows[0]) return res.status(404).json({ error: 'Книга не найдена' });
 
         const chapters = await pool.query(
@@ -96,7 +124,10 @@ router.get('/:id/chapters', authenticate, async (req, res) => {
 // который отдаёт сразу все главы списком.
 router.get('/:id/chapters/:number', authenticate, async (req, res) => {
     try {
-        const book = await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        const book = isAdmin
+            ? await pool.query('SELECT id FROM books WHERE id = $1', [req.params.id])
+            : await pool.query('SELECT id FROM books WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
         if (!book.rows[0]) return res.status(404).json({ error: 'Книга не найдена' });
 
         const { rows } = await pool.query(
