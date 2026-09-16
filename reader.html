@@ -6,19 +6,26 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="/auth-client.js"></script>
+    <style>
+        .theme-light  { background: #f8fafc; color: #1e293b; }
+        .theme-dark   { background: #111827; color: #e5e7eb; }
+        .theme-gray   { background: #4b5563; color: #f8fafc; }
+        .theme-sepia  { background: #f4ecd8; color: #5b4636; }
+        .theme-ocean  { background: #0f2942; color: #cde6f5; }
+    </style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-800" x-data="readerApp()" x-init="init()">
+<body class="min-h-screen" x-data="readerApp()" x-init="init()" :class="'theme-' + settings.theme">
     <div class="max-w-3xl mx-auto p-6">
         <!-- Верхняя панель -->
-        <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
-            <a href="/" class="text-sm text-blue-600 hover:underline font-medium">← На главную</a>
-            <h1 class="font-bold text-slate-700 truncate max-w-md" x-text="book.title"></h1>
+        <div class="flex justify-between items-center mb-6 pb-4 border-b" :class="isDarkTheme ? 'border-white/10' : 'border-slate-200'">
+            <a :href="`/book.html?book_id=${bookId}`" class="text-sm text-blue-600 hover:underline font-medium">← К книге</a>
+            <h1 class="font-bold truncate max-w-md" x-text="book.title"></h1>
             <div></div>
         </div>
 
         <!-- Ошибка / Загрузка -->
         <div x-show="error" x-text="error" class="p-4 bg-red-100 text-red-700 rounded-lg mb-4 text-sm"></div>
-        <div x-show="loading" class="text-center py-12 text-slate-400">Загрузка книги...</div>
+        <div x-show="loading" class="text-center py-12 opacity-50">Загрузка книги...</div>
 
         <!-- Контент читалки -->
         <div x-show="!loading && chapter">
@@ -35,19 +42,25 @@
             <!-- Шапка главы -->
             <div class="mb-6">
                 <span class="text-xs font-semibold text-blue-600 uppercase tracking-wider" x-text="`Глава ${chapter.chapter_number}`"></span>
-                <h2 class="text-2xl font-bold text-slate-900 mt-1" x-text="chapter.title"></h2>
+                <h2 class="text-2xl font-bold mt-1" x-text="chapter.title"></h2>
             </div>
 
             <!-- Текст главы -->
-            <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 prose max-w-none whitespace-pre-line font-serif text-lg leading-relaxed text-slate-700" x-text="chapter.content"></div>
+            <div class="p-8 rounded-2xl shadow-sm border prose max-w-none whitespace-pre-line font-serif text-lg leading-relaxed"
+                 :class="isDarkTheme ? 'bg-black/20 border-white/10' : 'bg-white border-slate-200'"
+                 x-text="chapter.content"></div>
 
             <!-- Навигация по главам -->
             <div class="flex justify-between items-center mt-8">
-                <button @click="changeChapter(currentChapterNum - 1)" :disabled="currentChapterNum <= 1" class="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-30">
+                <button @click="changeChapter(currentChapterNum - 1)" :disabled="currentChapterNum <= 1"
+                        class="px-4 py-2 border rounded-lg text-sm font-medium disabled:opacity-30"
+                        :class="isDarkTheme ? 'bg-black/20 border-white/10 hover:bg-black/30' : 'bg-white border-slate-300 hover:bg-slate-50'">
                     ← Предыдущая глава
                 </button>
-                <span class="text-sm text-slate-500 font-medium" x-text="`Глава ${currentChapterNum} из ${chapters.length}`"></span>
-                <button @click="changeChapter(currentChapterNum + 1)" :disabled="currentChapterNum >= chapters.length" class="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-30">
+                <span class="text-sm opacity-60 font-medium" x-text="`Глава ${currentChapterNum} из ${chapters.length}`"></span>
+                <button @click="changeChapter(currentChapterNum + 1)" :disabled="currentChapterNum >= chapters.length"
+                        class="px-4 py-2 border rounded-lg text-sm font-medium disabled:opacity-30"
+                        :class="isDarkTheme ? 'bg-black/20 border-white/10 hover:bg-black/30' : 'bg-white border-slate-300 hover:bg-slate-50'">
                     Следующая глава →
                 </button>
             </div>
@@ -56,9 +69,9 @@
 
     <!-- Модальное окно для Редактирования / Добавления главы -->
     <div x-show="modalOpen" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div class="bg-white rounded-xl max-w-2xl w-full p-6 space-y-4 shadow-xl" @click.away="modalOpen = false">
+        <div class="bg-white rounded-xl max-w-2xl w-full p-6 space-y-4 shadow-xl text-slate-800" @click.away="modalOpen = false">
             <h3 class="text-lg font-bold text-slate-800" x-text="modalMode === 'edit' ? 'Редактировать главу' : 'Новая глава'"></h3>
-            
+
             <div>
                 <label class="text-xs text-slate-500 font-medium">Название главы</label>
                 <input type="text" x-model="currentChapterTitle" class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-blue-500">
@@ -88,6 +101,7 @@
             error: null,
             currentUser: null,
             isOwnerOrAdmin: false,
+            settings: { theme: 'light' },
 
             // Управление модалкой
             modalOpen: false,
@@ -96,9 +110,15 @@
             currentChapterContent: '',
             editingChapterId: null,
 
+            get isDarkTheme() {
+                return ['dark', 'gray', 'ocean'].includes(this.settings.theme);
+            },
+
             async init() {
+                if (!requireAuthOrRedirect()) return;
+
                 const urlParams = new URLSearchParams(window.location.search);
-                this.bookId = urlParams.get('id');
+                this.bookId = urlParams.get('book_id');
                 const chNum = urlParams.get('chapter');
                 if (chNum) this.currentChapterNum = parseInt(chNum);
 
@@ -109,21 +129,16 @@
                 }
 
                 try {
-                    const token = getToken();
-                    
-                    // Получаем текущего пользователя для проверки прав
-                    const userRes = await fetch('/api/auth/me', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (userRes.ok) {
-                        const userData = await userRes.json();
-                        this.currentUser = userData.user;
+                    // Получаем текущего пользователя (для прав и сохранённой темы)
+                    const meRes = await authFetch('/api/users/me');
+                    if (meRes.ok) {
+                        const me = (await meRes.json()).user;
+                        this.currentUser = me;
+                        if (me.reader_settings?.theme) this.settings.theme = me.reader_settings.theme;
                     }
 
                     // Загружаем инфо о книге
-                    const bookRes = await fetch(`/api/books/${this.bookId}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    const bookRes = await authFetch(`/api/books/${this.bookId}`);
                     if (!bookRes.ok) throw new Error('Не удалось загрузить книгу');
                     const bookData = await bookRes.json();
                     this.book = bookData.book;
@@ -136,9 +151,7 @@
                     }
 
                     // Загружаем список глав
-                    const chaptersRes = await fetch(`/api/books/${this.bookId}/chapters`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    const chaptersRes = await authFetch(`/api/books/${this.bookId}/chapters`);
                     if (!chaptersRes.ok) throw new Error('Не удалось загрузить главы');
                     const chaptersData = await chaptersRes.json();
                     this.chapters = chaptersData.chapters;
@@ -161,17 +174,14 @@
 
             async loadChapterContent(num) {
                 try {
-                    const token = getToken();
-                    const res = await fetch(`/api/books/${this.bookId}/chapters/${num}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    const res = await authFetch(`/api/books/${this.bookId}/chapters/${num}`);
                     if (!res.ok) throw new Error('Ошибка загрузки главы');
                     const data = await res.json();
                     this.chapter = data.chapter;
                     this.currentChapterNum = num;
 
-                    const newUrl = `?id=${this.bookId}&chapter=${num}`;
-                    window.history.pushState({path: newUrl}, '', newUrl);
+                    const newUrl = `?book_id=${this.bookId}&chapter=${num}`;
+                    window.history.pushState({ path: newUrl }, '', newUrl);
                 } catch (e) {
                     this.error = e.message;
                 }
@@ -202,7 +212,6 @@
             },
 
             async saveChapter() {
-                const token = getToken();
                 try {
                     let url, method;
                     if (this.modalMode === 'edit') {
@@ -213,12 +222,9 @@
                         method = 'POST';
                     }
 
-                    const res = await fetch(url, {
+                    const res = await authFetch(url, {
                         method: method,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             title: this.currentChapterTitle,
                             content: this.currentChapterContent
