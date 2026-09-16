@@ -19,7 +19,7 @@
             <button type="button" @click="tab = 'upload'"
                     class="px-4 py-2 text-sm font-medium border-b-2 transition"
                     :class="tab === 'upload' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'">
-                Загрузить готовую книгу
+                Загрузить по главам
             </button>
         </div>
 
@@ -48,12 +48,12 @@
             <button type="submit" :disabled="loading" class="w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-50">
                 <span x-text="loading ? 'Запускаем генерацию...' : 'Сгенерировать книгу'"></span>
             </button>
-            <p class="text-xs text-slate-400">Генерация книги идёт в фоне и может занять несколько минут — она появится в списке на главной странице со статусом «Генерируется».</p>
+            <p class="text-xs text-slate-400">Генерация книги идёт в фоне и может занять несколько минут.</p>
         </form>
 
-        <!-- ЗАГРУЗКА ГОТОВОЙ КНИГИ -->
-        <form x-show="tab === 'upload'" @submit.prevent="upload()" class="space-y-4">
-            <h1 class="text-xl font-bold text-slate-800 mb-2">Загрузить готовую книгу</h1>
+        <!-- ЗАГРУЗКА КНИГИ ПО ГЛАВАМ -->
+        <form x-show="tab === 'upload'" @submit.prevent="uploadWithChapters()" class="space-y-4">
+            <h1 class="text-xl font-bold text-slate-800 mb-2">Загрузить книгу по главам</h1>
             <div>
                 <label class="text-sm text-slate-600">Название книги</label>
                 <input type="text" x-model="uploadTitle" required class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -62,16 +62,25 @@
                 <label class="text-sm text-slate-600">Жанр</label>
                 <input type="text" x-model="uploadGenre" placeholder="Фэнтези, детектив..." class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
             </div>
-            <div>
-                <label class="text-sm text-slate-600">Текстовый файл (.txt) или вставьте текст ниже</label>
-                <input type="file" accept=".txt" @change="onFileSelected($event)" class="w-full mt-1 text-sm">
+
+            <!-- Список глав -->
+            <div class="border-t pt-4 mt-4">
+                <h3 class="font-medium text-slate-700 mb-2">Главы книги</h3>
+                <template x-for="(chapter, index) in uploadChapters" :key="index">
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 mb-3 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-500" x-text="`Глава ${index + 1}`"></span>
+                            <button type="button" @click="uploadChapters.splice(index, 1)" class="text-red-500 text-xs hover:underline" x-show="uploadChapters.length > 1">Удалить</button>
+                        </div>
+                        <input type="text" x-model="chapter.title" placeholder="Название главы" class="w-full px-3 py-1 border border-slate-300 rounded text-sm" required>
+                        <textarea x-model="chapter.content" rows="4" placeholder="Текст главы..." class="w-full px-3 py-1 border border-slate-300 rounded text-sm" required></textarea>
+                    </div>
+                </template>
+                <button type="button" @click="uploadChapters.push({ title: '', content: '' })" class="text-sm text-blue-600 font-medium hover:underline">+ Добавить еще главу</button>
             </div>
-            <div>
-                <label class="text-sm text-slate-600">Текст книги</label>
-                <textarea x-model="uploadContent" rows="10" required placeholder="Вставьте полный текст книги..." class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"></textarea>
-            </div>
-            <button type="submit" :disabled="loading" class="w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-50">
-                <span x-text="loading ? 'Загружаем...' : 'Загрузить книгу'"></span>
+
+            <button type="submit" :disabled="loading" class="w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-50 mt-4">
+                <span x-text="loading ? 'Сохранение...' : 'Опубликовать книгу с главами'"></span>
             </button>
         </form>
     </div>
@@ -87,29 +96,21 @@
             prompt: '',
             chaptersCount: 5,
 
-            // Загрузка готовой книги
+            // Загрузка по главам
             uploadTitle: '',
             uploadGenre: '',
-            uploadContent: '',
+            uploadChapters: [{ title: 'Глава 1', content: '' }],
 
             loading: false,
             error: null,
             success: null,
-
-            onFileSelected(event) {
-                const file = event.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (e) => { this.uploadContent = e.target.result; };
-                reader.readAsText(file, 'UTF-8');
-            },
 
             async generate() {
                 this.loading = true;
                 this.error = null;
                 this.success = null;
 
-                const token = getToken(); // Берется из auth-client.js
+                const token = getToken();
 
                 try {
                     const res = await fetch('/api/books/generate', {
@@ -129,7 +130,7 @@
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || 'Ошибка генерации');
 
-                    this.success = 'Генерация запущена! Книга появится в списке на главной странице.';
+                    this.success = 'Генерация запущена! Книга появится в списке.';
                     setTimeout(() => location.href = '/', 1500);
                 } catch (e) {
                     this.error = e.message;
@@ -138,7 +139,7 @@
                 }
             },
 
-            async upload() {
+            async uploadWithChapters() {
                 this.loading = true;
                 this.error = null;
                 this.success = null;
@@ -146,6 +147,7 @@
                 const token = getToken();
 
                 try {
+                    // Создаем книгу и добавляем первую главу
                     const res = await fetch('/api/books/upload', {
                         method: 'POST',
                         headers: {
@@ -155,14 +157,32 @@
                         body: JSON.stringify({
                             title: this.uploadTitle,
                             genre: this.uploadGenre,
-                            content: this.uploadContent
+                            content: this.uploadChapters[0]?.content || '...'
                         })
                     });
 
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
 
-                    this.success = 'Книга успешно загружена!';
+                    const bookId = data.book.id;
+
+                    // Если глав больше одной, добавляем остальные
+                    for (let i = 1; i < this.uploadChapters.length; i++) {
+                        await fetch(`/api/books/${bookId}/chapters`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({
+                                chapter_number: i + 1,
+                                title: this.uploadChapters[i].title,
+                                content: this.uploadChapters[i].content
+                            })
+                        });
+                    }
+
+                    this.success = 'Книга и все главы успешно сохранены!';
                     setTimeout(() => location.href = '/', 1500);
                 } catch (e) {
                     this.error = e.message;
